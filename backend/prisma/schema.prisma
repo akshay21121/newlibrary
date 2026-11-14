@@ -1,0 +1,339 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+}
+
+model Admin {
+  id                 String    @id @default(uuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
+  phone              String?
+  avatarUrl          String?
+  resetToken         String?
+  resetTokenExpiry   DateTime?
+  lastLogin          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model LibraryProfile {
+  id                 String    @id @default("default-library")
+  name               String    @default("Apex Study Library")
+  tagline            String?   @default("Your Silent Haven for Focused Learning")
+  logoUrl            String?
+  coverUrl           String?
+  adminName          String?   @default("Administrator")
+  email              String?   @default("admin@apexlibrary.com")
+  phone              String?   @default("+91 98765 43210")
+  altPhone           String?
+  address            String?   @default("Plot 42, Knowledge Park, Central Avenue")
+  city               String?   @default("New Delhi")
+  state              String?   @default("Delhi")
+  pincode            String?   @default("110001")
+  openingTime        String    @default("06:00")
+  closingTime        String    @default("23:30")
+  weeklyHolidays     String    @default("[]") // JSON string array e.g. ["Sunday"]
+  specialClosures    String    @default("[]") // JSON string array of { date, reason }
+  facilities         String    @default("[\"High Speed Wi-Fi\", \"Air Conditioned\", \"RO Purified Water\", \"Personal Charging Ports\", \"CCTV Surveillance\", \"Locker Facility\"]")
+  receiptHeader      String?   @default("APEX STUDY LIBRARY\nOfficial Fee Receipt")
+  receiptFooter      String?   @default("Thank you for choosing Apex Library. Fees once paid are non-refundable.")
+  currency           String    @default("INR")
+  currencySymbol     String    @default("₹")
+  timezone           String    @default("Asia/Kolkata")
+  gstin              String?   @default("07AAAAA0000A1Z5")
+  termsAndConditions String?   @default("1. Maintain pin-drop silence in reading halls.\n2. Seats are non-transferable without prior admin approval.\n3. Library is not responsible for personal belongings.")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Shift {
+  id          String        @id @default(uuid())
+  name        String
+  code        String        @unique // MORNING, AFTERNOON, EVENING, FULL_DAY
+  startTime   String        // "06:00"
+  endTime     String        // "12:00"
+  isActive    Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  bookings    SeatBooking[]
+  bookingHistories SeatBookingHistory[]
+  feePlans    FeePlan[]
+}
+
+model Floor {
+  id          String        @id @default(uuid())
+  name        String        // e.g. "Ground Floor"
+  floorNumber Int           @default(0)
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  rooms       Room[]
+  seats       Seat[]
+  elements    FloorElement[]
+}
+
+model Room {
+  id          String        @id @default(uuid())
+  floorId     String
+  name        String        // e.g. "Main Reading Hall A"
+  description String?
+  width       Int           @default(1200)
+  height      Int           @default(800)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  floor       Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  seats       Seat[]
+  elements    FloorElement[]
+}
+
+model Seat {
+  id          String        @id @default(uuid())
+  floorId     String
+  roomId      String
+  seatNumber  String        // e.g. "A-01"
+  x           Float         @default(50)
+  y           Float         @default(50)
+  width       Float         @default(60)
+  height      Float         @default(60)
+  rotation    Float         @default(0)
+  type        String        @default("STANDARD") // STANDARD, PREMIUM, CORNER, CABIN
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  floor       Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  room        Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  bookings    SeatBooking[]
+  bookingHistories SeatBookingHistory[]
+
+  @@unique([roomId, seatNumber])
+}
+
+model FloorElement {
+  id          String   @id @default(uuid())
+  floorId     String
+  roomId      String
+  type        String   // TABLE, WALL, DOOR, PILLAR, PARTITION
+  label       String?
+  x           Float    @default(0)
+  y           Float    @default(0)
+  width       Float    @default(100)
+  height      Float    @default(20)
+  rotation    Float    @default(0)
+  properties  String   @default("{}") // JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  floor       Floor    @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+model Student {
+  id                       String        @id @default(uuid())
+  admissionNumber          String        @unique // LIB-2026-0001
+  fullName                 String
+  email                    String?
+  phone                    String
+  alternatePhone           String?
+  dateOfBirth              String?
+  gender                   String?       // MALE, FEMALE, OTHER
+  address                  String?
+  idProofType              String?       // AADHAAR, PAN, VOTER_ID, PASSPORT, COLLEGE_ID
+  idProofNumber            String?
+  idProofDocumentUrl       String?
+  photoUrl                 String?
+  emergencyContactName     String?
+  emergencyContactRelation String?
+  emergencyContactPhone    String?
+  bloodGroup               String?
+  targetExam               String?       // UPSC, CA, NEET, GATE, etc.
+  notes                    String?
+  status                   String        @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED, ARCHIVED
+  admissionDate            DateTime      @default(now())
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  bookings                 SeatBooking[]
+  invoices                 Invoice[]
+  payments                 Payment[]
+  bookingHistories         SeatBookingHistory[]
+  reminderLogs             ReminderLog[]
+}
+
+model FeePlan {
+  id          String        @id @default(uuid())
+  name        String        // e.g. "Monthly Morning Shift", "Full Day 3-Months"
+  planType    String        @default("SHIFT_BASED") // SHIFT_BASED, DURATION_BASED, ADMISSION_FEE
+  durationDays Int          @default(30)
+  shiftId     String?
+  price       Float         @default(0)
+  admissionFee Float        @default(0)
+  description String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  shift       Shift?        @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  bookings    SeatBooking[]
+  invoices    Invoice[]
+}
+
+model SeatBooking {
+  id           String        @id @default(uuid())
+  studentId    String
+  seatId       String
+  shiftId      String
+  feePlanId    String?
+  startDate    DateTime
+  endDate      DateTime
+  status       String        @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED, TRANSFERRED
+  monthlyPrice Float         @default(0)
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  seat         Seat          @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  shift        Shift         @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  feePlan      FeePlan?      @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+  invoices     Invoice[]
+  histories    SeatBookingHistory[]
+}
+
+model SeatBookingHistory {
+  id             String       @id @default(uuid())
+  bookingId      String
+  studentId      String
+  seatId         String
+  shiftId        String
+  actionType     String       // BOOKED, TRANSFERRED, RELEASED, EXTENDED, CANCELLED
+  previousSeatId String?
+  newSeatId      String?
+  remarks        String?
+  createdBy      String?      @default("Admin")
+  createdAt      DateTime     @default(now())
+
+  booking        SeatBooking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  seat           Seat         @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  shift          Shift        @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  invoiceNumber String        @unique // INV-2026-0001
+  studentId     String
+  bookingId     String?
+  feePlanId     String?
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime
+  subtotal      Float         @default(0)
+  discount      Float         @default(0)
+  tax           Float         @default(0)
+  totalAmount   Float         @default(0)
+  paidAmount    Float         @default(0)
+  balanceAmount Float         @default(0)
+  status        String        @default("UNPAID") // PAID, PARTIALLY_PAID, UNPAID, OVERDUE
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  student       Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  booking       SeatBooking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  feePlan       FeePlan?      @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+  payments      Payment[]
+  auditLogs     PaymentAuditLog[]
+  reminderLogs  ReminderLog[]
+}
+
+model Payment {
+  id             String            @id @default(uuid())
+  receiptNumber  String            @unique // REC-2026-0001
+  invoiceId      String
+  studentId      String
+  amount         Float
+  paymentDate    DateTime          @default(now())
+  paymentMethod  String            @default("CASH") // CASH, UPI, CARD, NET_BANKING, CHEQUE, OTHER
+  transactionRef String?           // UPI reference or bank transaction ID
+  remarks        String?
+  status         String            @default("SUCCESS") // SUCCESS, REVERSED
+  reversalReason String?
+  reversedAt     DateTime?
+  reversedBy     String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  invoice        Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  student        Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  auditLogs      PaymentAuditLog[]
+}
+
+model PaymentAuditLog {
+  id            String    @id @default(uuid())
+  paymentId     String?
+  invoiceId     String?
+  action        String    // PAYMENT_RECEIVED, PAYMENT_REVERSED, INVOICE_CREATED, INVOICE_ADJUSTED
+  previousState String?   // JSON snapshot
+  newState      String?   // JSON snapshot
+  changedBy     String    @default("Admin")
+  reason        String?
+  createdAt     DateTime  @default(now())
+
+  payment       Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  invoice       Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+}
+
+model ReminderLog {
+  id               String    @id @default(uuid())
+  studentId        String
+  invoiceId        String?
+  channel          String    // WHATSAPP, EMAIL
+  recipientContact String
+  templateName     String?
+  messageContent   String
+  status           String    @default("SENT") // SENT, FAILED, SIMULATED
+  simulated        Boolean   @default(false)
+  deliveryMetadata String?   // JSON
+  error            String?
+  sentAt           DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invoice          Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+}
+
+model ReminderSetting {
+  id                  String   @id @default("default-reminders")
+  autoRemindersEnabled Boolean  @default(false)
+  daysBeforeDue       String   @default("[3, 1]") // JSON array
+  daysAfterDue        String   @default("[1, 3, 7]") // JSON array
+  sendWhatsApp        Boolean  @default(true)
+  sendEmail           Boolean  @default(true)
+  whatsappTemplate    String   @default("Dear {student_name}, this is a reminder from {library_name}. Your library fee of ₹{amount_due} is due on {due_date}. Please pay to continue your reserved seat ({seat_number}).")
+  emailSubjectTemplate String   @default("Library Membership Fee Reminder - {library_name}")
+  emailBodyTemplate   String   @default("<p>Dear <strong>{student_name}</strong>,</p><p>This is a polite reminder that your library membership fee of <strong>₹{amount_due}</strong> for seat <strong>{seat_number}</strong> is due on <strong>{due_date}</strong>.</p><p>Please settle the payment at the library counter or via UPI.</p><p>Regards,<br>{library_name}</p>")
+  simulatedMode       Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityType String   // AUTH, STUDENT, SEAT, BOOKING, PAYMENT, SETTING
+  entityId   String?
+  action     String   // LOGIN, LOGOUT, CREATE, UPDATE, DELETE, REVERSE, TRANSFER, RELEASE
+  details    String?  // JSON
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+}
