@@ -482,26 +482,33 @@ export const StudentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL 1: NEW STUDENT ADMISSION */}
+      {/* MODAL 1: NEW STUDENT ADMISSION (RESPONSIVE VIEWPORT MODAL) */}
       {showAdmissionModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 my-8 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 z-50">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            {/* STICKY HEADER */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0 bg-white">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">New Student Admission</h3>
-                <p className="text-xs text-slate-500">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">New Student Admission</h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
                   Admission sequence number will be automatically generated (e.g. LIB-2026-XXXX)
                 </p>
               </div>
               <button
                 onClick={() => setShowAdmissionModal(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAdmissionSubmit} className="space-y-4 text-xs">
+            {/* FORM CONTAINER WITH SCROLLABLE BODY AND STICKY FOOTER */}
+            <form onSubmit={handleAdmissionSubmit} className="flex flex-col flex-1 overflow-hidden">
+              {/* SCROLLABLE BODY */}
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 text-xs">
               {/* Section 1: Personal Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -1114,22 +1121,23 @@ export const StudentsPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+              {/* STICKY FOOTER */}
+              <div className="flex items-center justify-between sm:justify-end gap-3 px-5 py-3.5 border-t border-slate-100 shrink-0 bg-slate-50/90">
                 <button
                   type="button"
                   onClick={() => setShowAdmissionModal(false)}
-                  className="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-100"
+                  className="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-200 text-xs transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm disabled:opacity-50 text-xs transition flex items-center space-x-1.5"
                 >
-                  {submitting ? 'Admitting...' : 'Complete Admission & Issue Invoice'}
+                  {submitting ? 'Admitting Student...' : 'Complete Admission & Issue Invoice'}
                 </button>
               </div>
             </form>
@@ -1137,21 +1145,26 @@ export const StudentsPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 2: RENEW MEMBERSHIP */}
+      {/* MODAL 2: RENEW MEMBERSHIP (RESPONSIVE VIEWPORT MODAL) */}
       {showRenewModal && selectedStudent && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 my-8 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            {/* STICKY HEADER */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0 bg-white">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">Renew Membership</h3>
                 <p className="text-xs text-slate-500">Student: {selectedStudent.fullName} ({selectedStudent.admissionNumber})</p>
               </div>
-              <button onClick={() => setShowRenewModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                onClick={() => setShowRenewModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleRenewSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleRenewSubmit} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
               {/* Category selection */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1.5">Membership Category</label>
@@ -1274,17 +1287,20 @@ export const StudentsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+              </div>
+
+              {/* STICKY FOOTER */}
+              <div className="flex items-center justify-end space-x-2 px-5 py-3.5 border-t border-slate-100 shrink-0 bg-slate-50/90">
                 <button
                   type="button"
                   onClick={() => setShowRenewModal(false)}
-                  className="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-100"
+                  className="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-200 text-xs transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                  className="px-4 py-2 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm text-xs transition"
                 >
                   Extend & Renew
                 </button>

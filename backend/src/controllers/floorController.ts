@@ -22,10 +22,12 @@ const seatUpdateSchema = z.object({
   seatNumber: z.string(),
   x: z.number(),
   y: z.number(),
-  width: z.number().default(60),
-  height: z.number().default(60),
+  width: z.number().default(70),
+  height: z.number().default(65),
   rotation: z.number().default(0),
   type: z.string().default('STANDARD'),
+  isActive: z.boolean().default(true),
+  properties: z.any().optional(),
 });
 
 const elementUpdateSchema = z.object({
@@ -37,6 +39,7 @@ const elementUpdateSchema = z.object({
   width: z.number(),
   height: z.number(),
   rotation: z.number().default(0),
+  isHidden: z.boolean().default(false),
   properties: z.any().optional(),
 });
 
@@ -50,13 +53,14 @@ const saveLayoutSchema = z.object({
 });
 
 const wizardSchema = z.object({
-  rows: z.number().min(1).max(20),
-  columns: z.number().min(1).max(20),
-  rowPrefixType: z.enum(['LETTERS', 'NUMBERS']).default('LETTERS'), // 'LETTERS' -> A-01, B-01; 'NUMBERS' -> S-01, S-02
-  prefix: z.string().default(''),
+  rows: z.number().min(1).max(25),
+  columns: z.number().min(1).max(25),
+  startNumber: z.number().default(1),
+  prefix: z.string().default(''), // Optional prefix (default empty for pure simple numeric: 1, 2, 3...)
+  numberingPattern: z.enum(['NUMERIC', 'ALPHA_ROW']).default('NUMERIC'),
   startX: z.number().default(100),
   startY: z.number().default(100),
-  spacingX: z.number().default(140),
+  spacingX: z.number().default(150),
   spacingY: z.number().default(130),
   seatWidth: z.number().default(70),
   seatHeight: z.number().default(65),
@@ -176,10 +180,15 @@ export async function getRoomLayout(req: AuthenticatedRequest, res: Response): P
     return;
   }
 
-  // Parse properties for elements
+  // Parse properties for elements and seats
   const elements = room.elements.map((el) => ({
     ...el,
     properties: JSON.parse(el.properties || '{}'),
+  }));
+
+  const seats = room.seats.map((seat) => ({
+    ...seat,
+    properties: JSON.parse(seat.properties || '{}'),
   }));
 
   res.json({
@@ -190,7 +199,7 @@ export async function getRoomLayout(req: AuthenticatedRequest, res: Response): P
       height: room.height,
       floor: room.floor,
     },
-    seats: room.seats,
+    seats,
     elements,
   });
 }
@@ -220,9 +229,27 @@ export async function saveRoomLayout(req: AuthenticatedRequest, res: Response): 
       });
     }
 
-    // 2. Upsert seats
+    // 2. Remove seats that were deleted in the builder (if no active bookings)
+    const incomingIds = new Set(seats.filter((s) => s.id && !s.id.startsWith('temp-')).map((s) => s.id));
+    const existingSeats = await tx.seat.findMany({
+      where: { roomId },
+      include: { bookings: { where: { status: 'ACTIVE' } } },
+    });
+
+    for (const exSeat of existingSeats) {
+      if (!incomingIds.has(exSeat.id)) {
+        if (exSeat.bookings.length === 0) {
+          await tx.seat.delete({ where: { id: exSeat.id } });
+        } else {
+          await tx.seat.update({ where: { id: exSeat.id }, data: { isActive: false } });
+        }
+      }
+    }
+
+    // 3. Upsert seats with properties
     for (const seatData of seats) {
-      if (seatData.id) {
+      const propertiesStr = JSON.stringify(seatData.properties || {});
+      if (seatData.id && !seatData.id.startsWith('temp-')) {
         await tx.seat.update({
           where: { id: seatData.id },
           data: {
@@ -233,6 +260,8 @@ export async function saveRoomLayout(req: AuthenticatedRequest, res: Response): 
             height: seatData.height,
             rotation: seatData.rotation,
             type: seatData.type,
+            isActive: seatData.isActive ?? true,
+            properties: propertiesStr,
           },
         });
       } else {
@@ -247,12 +276,14 @@ export async function saveRoomLayout(req: AuthenticatedRequest, res: Response): 
             height: seatData.height,
             rotation: seatData.rotation,
             type: seatData.type,
+            isActive: seatData.isActive ?? true,
+            properties: propertiesStr,
           },
         });
       }
     }
 
-    // 3. Elements: Replace elements in this room
+    // 4. Elements: Replace elements in this room (allows full deletion & customization)
     await tx.floorElement.deleteMany({
       where: { roomId },
     });
@@ -269,6 +300,7 @@ export async function saveRoomLayout(req: AuthenticatedRequest, res: Response): 
           width: el.width,
           height: el.height,
           rotation: el.rotation,
+          isHidden: el.isHidden ?? false,
           properties: JSON.stringify(el.properties || {}),
         })),
       });
@@ -299,19 +331,21 @@ export async function runLayoutWizard(req: AuthenticatedRequest, res: Response):
     width: number;
     height: number;
     type: string;
+    properties: string;
   }> = [];
 
   let count = 1;
   for (let r = 0; r < config.rows; r++) {
     for (let c = 0; c < config.columns; c++) {
       let seatNumber = '';
-      if (config.rowPrefixType === 'LETTERS') {
+      if (config.numberingPattern === 'ALPHA_ROW') {
         const rowChar = String.fromCharCode(65 + (r % 26));
-        const colNum = (c + 1).toString().padStart(2, '0');
-        seatNumber = config.prefix ? `${config.prefix}-${rowChar}${colNum}` : `${rowChar}-${colNum}`;
+        const colNum = (c + 1).toString();
+        seatNumber = config.prefix ? `${config.prefix}-${rowChar}${colNum}` : `${rowChar}${colNum}`;
       } else {
-        const num = count.toString().padStart(2, '0');
-        seatNumber = config.prefix ? `${config.prefix}-${num}` : `S-${num}`;
+        // Pure simple numeric: 1, 2, 3, 4, 5...
+        const currentNum = (config.startNumber || 1) + count - 1;
+        seatNumber = config.prefix ? `${config.prefix}-${currentNum}` : `${currentNum}`;
       }
 
       generatedSeats.push({
@@ -323,6 +357,13 @@ export async function runLayoutWizard(req: AuthenticatedRequest, res: Response):
         width: config.seatWidth,
         height: config.seatHeight,
         type: config.seatType,
+        properties: JSON.stringify({
+          fontSize: 14,
+          shiftFontSize: 8,
+          studentFontSize: 8,
+          indicatorHeight: 12,
+          borderRadius: 12,
+        }),
       });
 
       count++;
@@ -331,7 +372,6 @@ export async function runLayoutWizard(req: AuthenticatedRequest, res: Response):
 
   await prisma.$transaction(async (tx) => {
     if (config.clearExistingSeats) {
-      // Check if any seat in room has active bookings
       const activeBookings = await tx.seatBooking.findFirst({
         where: {
           seat: { roomId },
@@ -360,6 +400,7 @@ export async function runLayoutWizard(req: AuthenticatedRequest, res: Response):
           width: seat.width,
           height: seat.height,
           type: seat.type,
+          properties: seat.properties,
         },
         create: seat,
       });
@@ -372,6 +413,60 @@ export async function runLayoutWizard(req: AuthenticatedRequest, res: Response):
     message: `Generated ${generatedSeats.length} seats successfully via Quick Setup Wizard`,
     count: generatedSeats.length,
   });
+}
+
+export async function renumberSeats(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { roomId } = req.params;
+  const { startNumber = 1, sortMode = 'POSITION' } = req.body;
+
+  const room = await prisma.room.findUnique({
+    where: { id: roomId },
+    include: {
+      seats: {
+        where: { isActive: true },
+      },
+    },
+  });
+
+  if (!room) {
+    res.status(404).json({ error: 'Room not found' });
+    return;
+  }
+
+  // Sort seats: row by row (Y then X), or by existing seatNumber
+  const sortedSeats = [...room.seats].sort((a, b) => {
+    if (sortMode === 'POSITION') {
+      const yDiff = Math.abs(a.y - b.y);
+      if (yDiff > 40) return a.y - b.y;
+      return a.x - b.x;
+    }
+    const numA = parseInt(a.seatNumber.replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt(b.seatNumber.replace(/\D/g, ''), 10) || 0;
+    return numA - numB;
+  });
+
+  // Temporarily prefix to avoid unique constraint collisions during sequential rename
+  await prisma.$transaction(async (tx) => {
+    for (const seat of sortedSeats) {
+      await tx.seat.update({
+        where: { id: seat.id },
+        data: { seatNumber: `temp-${seat.id}` },
+      });
+    }
+
+    let current = Number(startNumber) || 1;
+    for (const seat of sortedSeats) {
+      await tx.seat.update({
+        where: { id: seat.id },
+        data: { seatNumber: current.toString() },
+      });
+      current++;
+    }
+  });
+
+  await logAuditEvent('ROOM', 'RENUMBER_SEATS', roomId, { seatsCount: sortedSeats.length, startNumber }, req);
+
+  res.json({ message: `Successfully renumbered ${sortedSeats.length} seats starting from ${startNumber}` });
 }
 
 export async function deleteSeat(req: AuthenticatedRequest, res: Response): Promise<void> {

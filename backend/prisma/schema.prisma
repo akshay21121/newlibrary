@@ -100,14 +100,15 @@ model Seat {
   id          String        @id @default(uuid())
   floorId     String
   roomId      String
-  seatNumber  String        // e.g. "A-01"
+  seatNumber  String        // e.g. "1", "2", "3" (simple numeric)
   x           Float         @default(50)
   y           Float         @default(50)
-  width       Float         @default(60)
-  height      Float         @default(60)
+  width       Float         @default(70)
+  height      Float         @default(65)
   rotation    Float         @default(0)
   type        String        @default("STANDARD") // STANDARD, PREMIUM, CORNER, CABIN
   isActive    Boolean       @default(true)
+  properties  String        @default("{}") // JSON for custom font size, text sizes, colors, border
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -123,14 +124,15 @@ model FloorElement {
   id          String   @id @default(uuid())
   floorId     String
   roomId      String
-  type        String   // TABLE, WALL, DOOR, PILLAR, PARTITION
+  type        String   // TABLE, WALL, DOOR, PILLAR, PARTITION, RECEPTION, CUSTOM
   label       String?
   x           Float    @default(0)
   y           Float    @default(0)
   width       Float    @default(100)
   height      Float    @default(20)
   rotation    Float    @default(0)
-  properties  String   @default("{}") // JSON
+  isHidden    Boolean  @default(false)
+  properties  String   @default("{}") // JSON for bgColor, borderColor, borderWidth, textColor, fontSize, fontWeight, textAlign, borderRadius
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

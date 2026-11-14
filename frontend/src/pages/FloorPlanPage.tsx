@@ -7,6 +7,7 @@ import {
   Trash2,
   RotateCw,
   Eye,
+  EyeOff,
   Edit3,
   Layers,
   LayoutGrid,
@@ -24,6 +25,19 @@ import {
   Sparkles,
   Clock,
   ShieldCheck,
+  Copy,
+  Undo2,
+  Redo2,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Grid,
+  Magnet,
+  Hash,
+  Palette,
+  Type,
+  Maximize,
+  Sliders,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { Floor, Room, Seat, FloorElement } from '../types/index.js';
@@ -44,11 +58,25 @@ export const FloorPlanPage: React.FC = () => {
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
   const [selectedElement, setSelectedElement] = useState<FloorElement | null>(null);
 
+  // Canvas Viewport Controls
+  const [zoom, setZoom] = useState<number>(1);
+  const [showGrid, setShowGrid] = useState<boolean>(true);
+  const [snapToGrid, setSnapToGrid] = useState<boolean>(true);
+
+  // Undo / Redo History Stack
+  const [history, setHistory] = useState<{ seats: Seat[]; elements: FloorElement[] }[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
   // Modals
   const [showWizardModal, setShowWizardModal] = useState(false);
+  const [showRenumberModal, setShowRenumberModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [showNewFloorModal, setShowNewFloorModal] = useState(false);
+  const [showAddElementDropdown, setShowAddElementDropdown] = useState(false);
+
+  // Renumber State
+  const [renumberStart, setRenumberStart] = useState<number>(1);
+  const [renumberSort, setRenumberSort] = useState<'POSITION' | 'CURRENT'>('POSITION');
 
   // Booking Modal State
   const [bookingShiftId, setBookingShiftId] = useState<string>('');
@@ -71,6 +99,8 @@ export const FloorPlanPage: React.FC = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [hasMovedFarEnough, setHasMovedFarEnough] = useState(false);
   const [dragType, setDragType] = useState<'SEAT' | 'ELEMENT' | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -79,10 +109,11 @@ export const FloorPlanPage: React.FC = () => {
   // Wizard state
   const [wizardRows, setWizardRows] = useState(4);
   const [wizardCols, setWizardCols] = useState(6);
+  const [wizardStartNum, setWizardStartNum] = useState(1);
   const [wizardPrefix, setWizardPrefix] = useState('');
-  const [wizardSpacingX, setWizardSpacingX] = useState(150);
+  const [wizardSpacingX, setWizardSpacingX] = useState(140);
   const [wizardSpacingY, setWizardSpacingY] = useState(130);
-  const [wizardPrefixType, setWizardPrefixType] = useState<'LETTERS' | 'NUMBERS'>('LETTERS');
+  const [wizardNumberingPattern, setWizardNumberingPattern] = useState<'NUMERIC' | 'ALPHA_ROW'>('NUMERIC');
 
   // Search & Filter in Grid/List View
   const [searchFilter, setSearchFilter] = useState('');
@@ -92,6 +123,57 @@ export const FloorPlanPage: React.FC = () => {
     fetchFloors();
     fetchFeePlans();
   }, []);
+
+  // Keyboard shortcuts for Undo/Redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [historyIndex, history]);
+
+  const recordSnapshot = (newSeats: Seat[], newElements: FloorElement[]) => {
+    const nextHistory = history.slice(0, historyIndex + 1);
+    nextHistory.push({
+      seats: JSON.parse(JSON.stringify(newSeats)),
+      elements: JSON.parse(JSON.stringify(newElements)),
+    });
+    // Keep max 25 history states
+    const trimmed = nextHistory.slice(-25);
+    setHistory(trimmed);
+    setHistoryIndex(trimmed.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prev = history[historyIndex - 1];
+      setSeats(JSON.parse(JSON.stringify(prev.seats)));
+      setElements(JSON.parse(JSON.stringify(prev.elements)));
+      setHistoryIndex(historyIndex - 1);
+      setHasUnsavedChanges(true);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const next = history[historyIndex + 1];
+      setSeats(JSON.parse(JSON.stringify(next.seats)));
+      setElements(JSON.parse(JSON.stringify(next.elements)));
+      setHistoryIndex(historyIndex + 1);
+      setHasUnsavedChanges(true);
+    }
+  };
 
   const fetchFloors = async () => {
     try {
@@ -133,7 +215,23 @@ export const FloorPlanPage: React.FC = () => {
       ]);
 
       setRoomData(layoutRes.data.room);
-      setElements(layoutRes.data.elements);
+
+      const parsedElements = (layoutRes.data.elements || []).map((el: any) => {
+        let props = el.properties;
+        if (typeof props === 'string') {
+          try {
+            props = JSON.parse(props);
+          } catch {
+            props = {};
+          }
+        }
+        return {
+          ...el,
+          isHidden: el.isHidden || false,
+          properties: props || {},
+        };
+      });
+      setElements(parsedElements);
       setShifts(matrixRes.data.shifts);
 
       // Merge visual coordinates with 3-shift matrix data
@@ -142,8 +240,17 @@ export const FloorPlanPage: React.FC = () => {
 
       const mergedSeats = layoutRes.data.seats.map((seat: any) => {
         const m = matrixMap.get(seat.id);
+        let props = seat.properties;
+        if (typeof props === 'string') {
+          try {
+            props = JSON.parse(props);
+          } catch {
+            props = {};
+          }
+        }
         return {
           ...seat,
+          properties: props || {},
           shifts: m?.shifts || [],
           summaryStatus: m?.summaryStatus || 'AVAILABLE',
           isFullDayOccupied: m?.isFullDayOccupied || false,
@@ -155,6 +262,15 @@ export const FloorPlanPage: React.FC = () => {
       if (matrixRes.data.stats) {
         setStats(matrixRes.data.stats);
       }
+
+      // Initialize history stack
+      setHistory([
+        {
+          seats: JSON.parse(JSON.stringify(mergedSeats)),
+          elements: JSON.parse(JSON.stringify(parsedElements)),
+        },
+      ]);
+      setHistoryIndex(0);
       setHasUnsavedChanges(false);
     } catch (err) {
       console.error('Failed to load room layout', err);
@@ -170,7 +286,7 @@ export const FloorPlanPage: React.FC = () => {
     fetchRoomLayout(roomId);
   };
 
-  // Canvas Drag & Drop handlers
+  // Canvas Drag & Drop handlers with accidental click movement threshold (4px)
   const handleMouseDownSeat = (e: React.MouseEvent, seat: Seat) => {
     if (builderMode !== 'BUILDER') return;
     e.stopPropagation();
@@ -178,12 +294,14 @@ export const FloorPlanPage: React.FC = () => {
     setSelectedElement(null);
     setDraggingId(seat.id);
     setDragType('SEAT');
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    setHasMovedFarEnough(false);
 
     const canvasRect = canvasRef.current?.getBoundingClientRect();
     if (canvasRect) {
       setDragOffset({
-        x: e.clientX - canvasRect.left - seat.x,
-        y: e.clientY - canvasRect.top - seat.y,
+        x: (e.clientX - canvasRect.left) / zoom - seat.x,
+        y: (e.clientY - canvasRect.top) / zoom - seat.y,
       });
     }
   };
@@ -195,12 +313,14 @@ export const FloorPlanPage: React.FC = () => {
     setSelectedSeat(null);
     setDraggingId(el.id);
     setDragType('ELEMENT');
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    setHasMovedFarEnough(false);
 
     const canvasRect = canvasRef.current?.getBoundingClientRect();
     if (canvasRect) {
       setDragOffset({
-        x: e.clientX - canvasRect.left - el.x,
-        y: e.clientY - canvasRect.top - el.y,
+        x: (e.clientX - canvasRect.left) / zoom - el.x,
+        y: (e.clientY - canvasRect.top) / zoom - el.y,
       });
     }
   };
@@ -208,50 +328,85 @@ export const FloorPlanPage: React.FC = () => {
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!draggingId || builderMode !== 'BUILDER') return;
 
+    // Movement threshold check to prevent tiny unintended displacements on click
+    if (!hasMovedFarEnough) {
+      const dist = Math.hypot(e.clientX - dragStartPos.x, e.clientY - dragStartPos.y);
+      if (dist < 4) return;
+      setHasMovedFarEnough(true);
+    }
+
     const canvasRect = canvasRef.current?.getBoundingClientRect();
     if (!canvasRect) return;
 
-    const newX = Math.max(10, Math.min(canvasRect.width - 60, e.clientX - canvasRect.left - dragOffset.x));
-    const newY = Math.max(10, Math.min(canvasRect.height - 60, e.clientY - canvasRect.top - dragOffset.y));
+    const rawX = (e.clientX - canvasRect.left) / zoom - dragOffset.x;
+    const rawY = (e.clientY - canvasRect.top) / zoom - dragOffset.y;
 
-    // Snap to 10px grid
-    const snappedX = Math.round(newX / 10) * 10;
-    const snappedY = Math.round(newY / 10) * 10;
+    const boundedX = Math.max(10, Math.min(2400, rawX));
+    const boundedY = Math.max(10, Math.min(1800, rawY));
+
+    // Snap to 10px grid if enabled
+    const finalX = snapToGrid ? Math.round(boundedX / 10) * 10 : Math.round(boundedX);
+    const finalY = snapToGrid ? Math.round(boundedY / 10) * 10 : Math.round(boundedY);
 
     if (dragType === 'SEAT') {
       setSeats((prev) =>
-        prev.map((s) => (s.id === draggingId ? { ...s, x: snappedX, y: snappedY } : s))
+        prev.map((s) => (s.id === draggingId ? { ...s, x: finalX, y: finalY } : s))
       );
+      if (selectedSeat && selectedSeat.id === draggingId) {
+        setSelectedSeat((prev) => (prev ? { ...prev, x: finalX, y: finalY } : null));
+      }
       setHasUnsavedChanges(true);
     } else if (dragType === 'ELEMENT') {
       setElements((prev) =>
-        prev.map((el) => (el.id === draggingId ? { ...el, x: snappedX, y: snappedY } : el))
+        prev.map((el) => (el.id === draggingId ? { ...el, x: finalX, y: finalY } : el))
       );
+      if (selectedElement && selectedElement.id === draggingId) {
+        setSelectedElement((prev) => (prev ? { ...prev, x: finalX, y: finalY } : null));
+      }
       setHasUnsavedChanges(true);
     }
   };
 
   const handleMouseUp = () => {
+    if (draggingId && hasMovedFarEnough) {
+      recordSnapshot(seats, elements);
+    }
     setDraggingId(null);
     setDragType(null);
+    setHasMovedFarEnough(false);
   };
 
-  // Add new seat
+  // Add new seat with Simple Sequential Numeric Number (1, 2, 3...)
   const handleAddSeat = () => {
-    const nextNumber = `S-${(seats.length + 1).toString().padStart(2, '0')}`;
+    const numericSeats = seats
+      .map((s) => parseInt(s.seatNumber.replace(/\D/g, ''), 10))
+      .filter((n) => !isNaN(n));
+    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : (seats.length + 1).toString();
+
     const newSeat: Seat = {
       id: `temp-${Date.now()}`,
       floorId: selectedFloorId,
       roomId: selectedRoomId,
       seatNumber: nextNumber,
-      x: 100,
-      y: 100,
+      x: 80,
+      y: 80,
       width: 70,
       height: 65,
       rotation: 0,
       type: 'STANDARD',
       isActive: true,
       summaryStatus: 'AVAILABLE',
+      properties: {
+        fontSize: 13,
+        shiftFontSize: 8,
+        studentFontSize: 8,
+        indicatorHeight: 12,
+        borderRadius: 12,
+        bgColor: '#ffffff',
+        borderColor: '#cbd5e1',
+        borderWidth: 1,
+        textColor: '#0f172a',
+      },
       shifts: shifts.map((sh) => ({
         shiftId: sh.id,
         shiftCode: sh.code,
@@ -263,51 +418,267 @@ export const FloorPlanPage: React.FC = () => {
       })),
     };
 
-    setSeats([...seats, newSeat]);
+    const updatedSeats = [...seats, newSeat];
+    setSeats(updatedSeats);
     setSelectedSeat(newSeat);
+    setSelectedElement(null);
     setHasUnsavedChanges(true);
+    recordSnapshot(updatedSeats, elements);
   };
 
-  // Add floor element (Table, Wall, Door, Partition)
-  const handleAddElement = (type: 'TABLE' | 'WALL' | 'DOOR' | 'PARTITION') => {
+  // Duplicate Seat
+  const handleDuplicateSeat = (seat: Seat) => {
+    const numericSeats = seats
+      .map((s) => parseInt(s.seatNumber.replace(/\D/g, ''), 10))
+      .filter((n) => !isNaN(n));
+    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : (seats.length + 1).toString();
+
+    const duplicatedSeat: Seat = {
+      ...JSON.parse(JSON.stringify(seat)),
+      id: `temp-${Date.now()}`,
+      seatNumber: nextNumber,
+      x: seat.x + 20,
+      y: seat.y + 20,
+      summaryStatus: 'AVAILABLE',
+      isFullDayOccupied: false,
+      fullDayStudent: null,
+      shifts: shifts.map((sh) => ({
+        shiftId: sh.id,
+        shiftCode: sh.code,
+        shiftName: sh.name,
+        timing: `${sh.startTime} - ${sh.endTime}`,
+        isBooked: false,
+        statusColor: 'RED',
+        booking: null,
+      })),
+    };
+
+    const updatedSeats = [...seats, duplicatedSeat];
+    setSeats(updatedSeats);
+    setSelectedSeat(duplicatedSeat);
+    setHasUnsavedChanges(true);
+    recordSnapshot(updatedSeats, elements);
+  };
+
+  // Add floor element (Table, Wall, Partition, Reception Desk, Door, Custom)
+  const handleAddElement = (
+    type: 'TABLE' | 'WALL' | 'DOOR' | 'PARTITION' | 'RECEPTION' | 'CUSTOM'
+  ) => {
+    setShowAddElementDropdown(false);
+    let label = 'Table';
+    let width = 200;
+    let height = 50;
+    let bgColor = '#fef3c7';
+    let borderColor = '#f59e0b';
+    let textColor = '#78350f';
+    let borderWidth = 2;
+    let borderRadius = 8;
+    let fontSize = 11;
+    let fontWeight = 'bold';
+
+    if (type === 'RECEPTION') {
+      label = 'Admin / Reception Desk';
+      width = 240;
+      height = 55;
+      bgColor = '#e0f2fe';
+      borderColor = '#0284c7';
+      textColor = '#0369a1';
+      borderWidth = 2;
+      borderRadius = 10;
+    } else if (type === 'PARTITION') {
+      label = 'Acoustic Glass Partition';
+      width = 300;
+      height = 16;
+      bgColor = '#f1f5f9';
+      borderColor = '#94a3b8';
+      textColor = '#475569';
+      borderWidth = 1;
+      borderRadius = 4;
+    } else if (type === 'WALL') {
+      label = 'Main Wall';
+      width = 350;
+      height = 20;
+      bgColor = '#334155';
+      borderColor = '#0f172a';
+      textColor = '#f8fafc';
+      borderWidth = 1;
+      borderRadius = 4;
+    } else if (type === 'DOOR') {
+      label = 'Entry / Exit Door';
+      width = 70;
+      height = 50;
+      bgColor = '#ecfdf5';
+      borderColor = '#10b981';
+      textColor = '#065f46';
+      borderWidth = 2;
+      borderRadius = 6;
+    } else if (type === 'CUSTOM') {
+      label = 'Custom Area';
+      width = 160;
+      height = 80;
+      bgColor = '#faf5ff';
+      borderColor = '#a855f7';
+      textColor = '#6b21a8';
+      borderWidth = 2;
+      borderRadius = 8;
+    }
+
     const newEl: FloorElement = {
       id: `temp-el-${Date.now()}`,
       floorId: selectedFloorId,
       roomId: selectedRoomId,
       type,
-      label: type === 'TABLE' ? 'Study Table' : type === 'WALL' ? 'Wall Partition' : 'Door',
-      x: 150,
-      y: 150,
-      width: type === 'TABLE' ? 200 : type === 'WALL' ? 300 : 50,
-      height: type === 'TABLE' ? 50 : type === 'WALL' ? 12 : 50,
+      label,
+      x: 120,
+      y: 120,
+      width,
+      height,
       rotation: 0,
+      isHidden: false,
+      properties: {
+        bgColor,
+        borderColor,
+        textColor,
+        borderWidth,
+        borderRadius,
+        fontSize,
+        fontWeight,
+        textAlign: 'center',
+      },
     };
 
-    setElements([...elements, newEl]);
+    const updated = [...elements, newEl];
+    setElements(updated);
     setSelectedElement(newEl);
+    setSelectedSeat(null);
+    setHasUnsavedChanges(true);
+    recordSnapshot(seats, updated);
+  };
+
+  // Duplicate Element
+  const handleDuplicateElement = (el: FloorElement) => {
+    const duplicated: FloorElement = {
+      ...JSON.parse(JSON.stringify(el)),
+      id: `temp-el-${Date.now()}`,
+      x: el.x + 20,
+      y: el.y + 20,
+    };
+
+    const updated = [...elements, duplicated];
+    setElements(updated);
+    setSelectedElement(duplicated);
+    setHasUnsavedChanges(true);
+    recordSnapshot(seats, updated);
+  };
+
+  // Toggle Hide / Show Element
+  const handleToggleHideElement = (el: FloorElement) => {
+    const updated = elements.map((item) =>
+      item.id === el.id ? { ...item, isHidden: !item.isHidden } : item
+    );
+    setElements(updated);
+    if (selectedElement?.id === el.id) {
+      setSelectedElement({ ...selectedElement, isHidden: !selectedElement.isHidden });
+    }
+    setHasUnsavedChanges(true);
+    recordSnapshot(seats, updated);
+  };
+
+  // Delete Element with Confirmation
+  const handleDeleteElement = (el: FloorElement) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to permanently delete the object "${el.label || el.type}"?\n\nThis will remove it from the floor plan.`
+    );
+    if (!confirmDelete) return;
+
+    const updated = elements.filter((item) => item.id !== el.id);
+    setElements(updated);
+    setSelectedElement(null);
+    setHasUnsavedChanges(true);
+    recordSnapshot(seats, updated);
+  };
+
+  // Update Element Properties in Inspector
+  const handleUpdateElement = (updates: Partial<FloorElement> | { properties: any }) => {
+    if (!selectedElement) return;
+
+    const updatedEl: FloorElement = {
+      ...selectedElement,
+      ...updates,
+      properties: {
+        ...(selectedElement.properties || {}),
+        ...((updates as any).properties || {}),
+      },
+    };
+
+    const updatedList = elements.map((item) =>
+      item.id === selectedElement.id ? updatedEl : item
+    );
+    setElements(updatedList);
+    setSelectedElement(updatedEl);
     setHasUnsavedChanges(true);
   };
 
-  // Delete seat
+  // Update Seat Properties in Inspector
+  const handleUpdateSeat = (updates: Partial<Seat> | { properties: any }) => {
+    if (!selectedSeat) return;
+
+    const updatedSeat: Seat = {
+      ...selectedSeat,
+      ...updates,
+      properties: {
+        ...(selectedSeat.properties || {}),
+        ...((updates as any).properties || {}),
+      },
+    };
+
+    const updatedList = seats.map((item) =>
+      item.id === selectedSeat.id ? updatedSeat : item
+    );
+    setSeats(updatedList);
+    setSelectedSeat(updatedSeat);
+    setHasUnsavedChanges(true);
+  };
+
+  // Delete seat with confirmation & safety check
   const handleDeleteSeat = async (seatId: string) => {
-    if (seatId.startsWith('temp-')) {
-      setSeats(seats.filter((s) => s.id !== seatId));
-      setSelectedSeat(null);
+    const targetSeat = seats.find((s) => s.id === seatId);
+    const hasBookings =
+      targetSeat?.isFullDayOccupied || targetSeat?.shifts?.some((sh) => sh.isBooked);
+
+    if (hasBookings) {
+      alert(
+        `Cannot delete Seat ${targetSeat?.seatNumber} because it currently has active student bookings. Please release or transfer the student bookings first.`
+      );
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this seat?')) return;
+    if (!window.confirm(`Are you sure you want to permanently delete Seat ${targetSeat?.seatNumber || ''}?`)) {
+      return;
+    }
+
+    if (seatId.startsWith('temp-')) {
+      const updated = seats.filter((s) => s.id !== seatId);
+      setSeats(updated);
+      setSelectedSeat(null);
+      recordSnapshot(updated, elements);
+      setHasUnsavedChanges(true);
+      return;
+    }
 
     try {
       await api.delete(`/floors/seats/${seatId}`);
-      setSeats(seats.filter((s) => s.id !== seatId));
+      const updated = seats.filter((s) => s.id !== seatId);
+      setSeats(updated);
       setSelectedSeat(null);
+      recordSnapshot(updated, elements);
+      alert('Seat deleted successfully!');
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete seat. Active bookings may exist.');
+      alert(err.response?.data?.error || 'Failed to delete seat.');
     }
   };
 
-  // Save full layout
+  // Save full layout (seats with properties, elements with isHidden and properties)
   const handleSaveLayout = async () => {
     if (!selectedRoomId) return;
     setSaving(true);
@@ -316,13 +687,14 @@ export const FloorPlanPage: React.FC = () => {
       await api.put(`/floors/rooms/${selectedRoomId}/layout`, {
         seats: seats.map((s) => ({
           id: s.id.startsWith('temp-') ? undefined : s.id,
-          seatNumber: s.seatNumber,
+          seatNumber: s.seatNumber.trim(),
           x: s.x,
           y: s.y,
           width: s.width,
           height: s.height,
           rotation: s.rotation,
           type: s.type,
+          properties: JSON.stringify(s.properties || {}),
         })),
         elements: elements.map((el) => ({
           type: el.type,
@@ -332,13 +704,14 @@ export const FloorPlanPage: React.FC = () => {
           width: el.width,
           height: el.height,
           rotation: el.rotation,
-          properties: el.properties,
+          isHidden: el.isHidden || false,
+          properties: JSON.stringify(el.properties || {}),
         })),
       });
 
       setHasUnsavedChanges(false);
-      fetchRoomLayout(selectedRoomId);
-      alert('Floor plan and seating layout saved successfully!');
+      await fetchRoomLayout(selectedRoomId);
+      alert('Floor plan layout and all customizations saved successfully!');
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to save layout');
     } finally {
@@ -346,7 +719,23 @@ export const FloorPlanPage: React.FC = () => {
     }
   };
 
-  // Run Quick Setup Wizard
+  // Renumber Seats Tool
+  const handleExecuteRenumber = async () => {
+    if (!selectedRoomId) return;
+    try {
+      await api.post(`/floors/rooms/${selectedRoomId}/renumber`, {
+        startNumber: Number(renumberStart) || 1,
+        sortMode: renumberSort,
+      });
+      setShowRenumberModal(false);
+      await fetchRoomLayout(selectedRoomId);
+      alert(`Seats renumbered sequentially starting from ${renumberStart}!`);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to renumber seats');
+    }
+  };
+
+  // Run Quick Setup Wizard with pure numeric option
   const handleRunWizard = async () => {
     if (!selectedRoomId) return;
 
@@ -354,8 +743,9 @@ export const FloorPlanPage: React.FC = () => {
       await api.post(`/floors/rooms/${selectedRoomId}/wizard`, {
         rows: Number(wizardRows),
         columns: Number(wizardCols),
-        rowPrefixType: wizardPrefixType,
-        prefix: wizardPrefix,
+        startNumber: Number(wizardStartNum) || 1,
+        numberingPattern: wizardNumberingPattern,
+        prefix: wizardPrefix.trim(),
         spacingX: Number(wizardSpacingX),
         spacingY: Number(wizardSpacingY),
         clearExistingSeats: false,
@@ -391,7 +781,6 @@ export const FloorPlanPage: React.FC = () => {
     setStudentSearch('');
     setStudentOptions([]);
 
-    // Set default fee plan matching shift
     const matchingPlan = feePlans.find((p) => p.shiftId === shiftId) || feePlans[0];
     if (matchingPlan) {
       setSelectedFeePlanId(matchingPlan.id);
@@ -488,13 +877,20 @@ export const FloorPlanPage: React.FC = () => {
   });
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto select-none">
-      {/* Header & Controls */}
+    <div className="p-4 md:p-8 space-y-6 max-w-[1680px] mx-auto select-none">
+      {/* Top Header & Toolbar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Floor Plan & Seat Management</h1>
+          <div className="flex items-center space-x-2">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Floor Plan & Seat Management</h1>
+            {hasUnsavedChanges && (
+              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-300">
+                Unsaved Changes
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Visual 2D drag-and-drop builder with Three Independent Shifts per seat (Morning, Afternoon, Evening)
+            Visual 2D Builder with pure numeric seat numbering (1, 2, 3...) and Three Independent Shifts (Morning, Afternoon, Evening)
           </p>
         </div>
 
@@ -521,7 +917,10 @@ export const FloorPlanPage: React.FC = () => {
           {/* Mode Switcher: Live 3-Shift View vs Builder Mode */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
             <button
-              onClick={() => setBuilderMode('LIVE_SHIFTS')}
+              onClick={() => {
+                setBuilderMode('LIVE_SHIFTS');
+                setSelectedElement(null);
+              }}
               className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition ${
                 builderMode === 'LIVE_SHIFTS'
                   ? 'bg-white text-emerald-700 shadow-xs'
@@ -575,35 +974,115 @@ export const FloorPlanPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Builder Action Buttons */}
+          {/* Builder Action Toolbar */}
           {builderMode === 'BUILDER' && (
-            <>
+            <div className="flex items-center gap-1.5">
+              {/* Undo / Redo */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  onClick={handleUndo}
+                  disabled={historyIndex <= 0}
+                  title="Undo (Ctrl+Z)"
+                  className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 disabled:opacity-40 transition"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleRedo}
+                  disabled={historyIndex >= history.length - 1}
+                  title="Redo (Ctrl+Y)"
+                  className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 disabled:opacity-40 transition"
+                >
+                  <Redo2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Add Seat */}
               <button
                 onClick={handleAddSeat}
                 className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center space-x-1 transition"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Add Seat</span>
+                <span>+ Seat</span>
               </button>
+
+              {/* Add Floor Object Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowAddElementDropdown(!showAddElementDropdown)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center space-x-1 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Object</span>
+                </button>
+                {showAddElementDropdown && (
+                  <div className="absolute left-0 mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-xs">
+                    <button
+                      onClick={() => handleAddElement('TABLE')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-amber-50 hover:text-amber-800 font-medium transition flex items-center justify-between"
+                    >
+                      <span>Study Table</span>
+                      <span className="text-[10px] text-slate-400">Desk</span>
+                    </button>
+                    <button
+                      onClick={() => handleAddElement('RECEPTION')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-blue-50 hover:text-blue-800 font-medium transition flex items-center justify-between"
+                    >
+                      <span>Admin / Reception Desk</span>
+                      <span className="text-[10px] text-slate-400">Front</span>
+                    </button>
+                    <button
+                      onClick={() => handleAddElement('PARTITION')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-slate-100 font-medium transition flex items-center justify-between"
+                    >
+                      <span>Acoustic Partition</span>
+                      <span className="text-[10px] text-slate-400">Glass</span>
+                    </button>
+                    <button
+                      onClick={() => handleAddElement('WALL')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-slate-100 font-medium transition flex items-center justify-between"
+                    >
+                      <span>Main Wall</span>
+                      <span className="text-[10px] text-slate-400">Divider</span>
+                    </button>
+                    <button
+                      onClick={() => handleAddElement('DOOR')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 hover:text-emerald-800 font-medium transition flex items-center justify-between"
+                    >
+                      <span>Entry / Exit Door</span>
+                      <span className="text-[10px] text-slate-400">Door</span>
+                    </button>
+                    <button
+                      onClick={() => handleAddElement('CUSTOM')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-purple-50 hover:text-purple-800 font-medium transition flex items-center justify-between"
+                    >
+                      <span>Custom Object</span>
+                      <span className="text-[10px] text-slate-400">Box</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Renumber Seats Tool */}
               <button
-                onClick={() => handleAddElement('TABLE')}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
+                onClick={() => setShowRenumberModal(true)}
+                title="Renumber seats sequentially (1, 2, 3...)"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center space-x-1 transition"
               >
-                + Table
+                <Hash className="w-3.5 h-3.5" />
+                <span>Renumber</span>
               </button>
-              <button
-                onClick={() => handleAddElement('WALL')}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
-              >
-                + Partition
-              </button>
+
+              {/* Wizard */}
               <button
                 onClick={() => setShowWizardModal(true)}
-                className="px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 text-xs font-semibold flex items-center space-x-1 transition"
+                className="px-2.5 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 text-xs font-semibold flex items-center space-x-1 transition"
               >
                 <Wand2 className="w-3.5 h-3.5" />
                 <span>Wizard</span>
               </button>
+
+              {/* Save Layout */}
               <button
                 onClick={handleSaveLayout}
                 disabled={saving}
@@ -616,7 +1095,7 @@ export const FloorPlanPage: React.FC = () => {
                 <Save className="w-3.5 h-3.5" />
                 <span>{saving ? 'Saving...' : 'Save Layout'}</span>
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -676,25 +1155,17 @@ export const FloorPlanPage: React.FC = () => {
         </div>
       )}
 
-      {/* 3-Shift Legend Badge */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-3.5 bg-slate-900 text-white rounded-2xl text-xs shadow-md">
+      {/* 3-Shift Legend Badge & Canvas Control Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-slate-900 text-white rounded-2xl text-xs shadow-md">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-bold text-slate-300">Status Indicator:</span>
+          <span className="font-bold text-slate-300">Status:</span>
           <div className="flex items-center space-x-1.5 font-semibold text-emerald-400">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            <span>Green = Occupied / Booked</span>
+            <span>Green = Booked</span>
           </div>
           <div className="flex items-center space-x-1.5 font-semibold text-rose-400">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
             <span>Red = Available</span>
-          </div>
-          <div className="flex items-center space-x-1.5 font-semibold text-amber-400">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            <span>Yellow = Pending</span>
-          </div>
-          <div className="flex items-center space-x-1.5 font-semibold text-slate-400">
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-            <span>Grey = Inactive</span>
           </div>
           <div className="flex items-center space-x-1.5 font-semibold text-purple-300 pl-2 border-l border-slate-700">
             <span className="px-1.5 py-0.2 bg-purple-500 text-white rounded text-[10px] font-black">FULL DAY</span>
@@ -702,171 +1173,519 @@ export const FloorPlanPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4 text-slate-400 font-mono text-[11px]">
-          <span className="flex items-center space-x-1 text-amber-300">
-            <Sun className="w-3.5 h-3.5" />
-            <span>Morning: 06:00-12:00</span>
-          </span>
-          <span className="flex items-center space-x-1 text-orange-300">
-            <Sunset className="w-3.5 h-3.5" />
-            <span>Afternoon: 12:00-18:00</span>
-          </span>
-          <span className="flex items-center space-x-1 text-indigo-300">
-            <Moon className="w-3.5 h-3.5" />
-            <span>Evening: 18:00-23:30</span>
-          </span>
+        {/* Viewport & Canvas Controls: Zoom, Grid, Snap */}
+        <div className="flex items-center space-x-3 text-slate-300 text-xs">
+          {/* Zoom Controls */}
+          <div className="flex items-center space-x-1 bg-slate-800 px-2 py-1 rounded-xl border border-slate-700">
+            <button
+              onClick={() => setZoom((prev) => Math.max(0.5, Number((prev - 0.1).toFixed(1))))}
+              title="Zoom Out"
+              className="p-1 hover:text-white"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="font-mono text-[11px] w-10 text-center">{Math.round(zoom * 100)}%</span>
+            <button
+              onClick={() => setZoom((prev) => Math.min(1.8, Number((prev + 0.1).toFixed(1))))}
+              title="Zoom In"
+              className="p-1 hover:text-white"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setZoom(1)}
+              title="Reset Zoom to 100%"
+              className="p-1 hover:text-white pl-1 border-l border-slate-700"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Grid Visibility Toggle */}
+          <button
+            onClick={() => setShowGrid(!showGrid)}
+            className={`p-1.5 rounded-xl border flex items-center space-x-1 transition ${
+              showGrid
+                ? 'bg-slate-800 text-emerald-400 border-slate-700'
+                : 'text-slate-500 border-transparent hover:text-slate-300'
+            }`}
+            title="Toggle Canvas Grid"
+          >
+            <Grid className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Grid</span>
+          </button>
+
+          {/* Snap-to-Grid Toggle */}
+          <button
+            onClick={() => setSnapToGrid(!snapToGrid)}
+            className={`p-1.5 rounded-xl border flex items-center space-x-1 transition ${
+              snapToGrid
+                ? 'bg-slate-800 text-blue-400 border-slate-700'
+                : 'text-slate-500 border-transparent hover:text-slate-300'
+            }`}
+            title="Toggle Snap to Grid (10px)"
+          >
+            <Magnet className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Snap</span>
+          </button>
         </div>
       </div>
 
       {/* VIEW MODE 1: VISUAL 2D CANVAS */}
       {viewMode === 'VISUAL' && (
-        <div className="relative bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden min-h-[700px]">
-          {/* Subtle Grid Background */}
+        <div className="relative bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden min-h-[750px]">
+          {/* Scrollable Canvas Viewport */}
           <div
             ref={canvasRef}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            className="w-full h-[750px] relative overflow-auto bg-slate-50/70 select-none"
-            style={{
-              backgroundImage:
-                'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
-              backgroundSize: '20px 20px',
+            onClick={() => {
+              // Click outside deselects
+              setSelectedSeat(null);
+              setSelectedElement(null);
+              setShowAddElementDropdown(false);
             }}
+            className="w-full h-[780px] relative overflow-auto bg-slate-50/70 select-none cursor-default"
           >
-            {/* Architectural Elements (Tables, Walls, Partitions) */}
-            {elements.map((el) => (
-              <div
-                key={el.id}
-                onMouseDown={(e) => handleMouseDownElement(e, el)}
-                style={{
-                  left: `${el.x}px`,
-                  top: `${el.y}px`,
-                  width: `${el.width}px`,
-                  height: `${el.height}px`,
-                  transform: `rotate(${el.rotation}deg)`,
-                }}
-                className={`absolute rounded flex items-center justify-center text-[10px] font-bold tracking-wider uppercase transition-shadow ${
-                  el.type === 'WALL'
-                    ? 'bg-slate-700 text-slate-200 border border-slate-900 shadow-sm'
-                    : el.type === 'TABLE'
-                    ? 'bg-amber-100 text-amber-900 border-2 border-amber-300 shadow-xs'
-                    : el.type === 'DOOR'
-                    ? 'bg-blue-100 text-blue-800 border-2 border-dashed border-blue-400'
-                    : 'bg-slate-300 text-slate-700'
-                } ${
-                  selectedElement?.id === el.id && builderMode === 'BUILDER'
-                    ? 'ring-2 ring-blue-500 shadow-lg cursor-move'
-                    : builderMode === 'BUILDER'
-                    ? 'cursor-move hover:ring-1 hover:ring-blue-300'
-                    : ''
-                }`}
-              >
-                <span className="truncate px-1">{el.label}</span>
-              </div>
-            ))}
+            {/* Transform Canvas Layer for Zooming */}
+            <div
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top left',
+                width: '2600px',
+                height: '1900px',
+                position: 'relative',
+                backgroundImage: showGrid
+                  ? 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)'
+                  : 'none',
+                backgroundSize: '20px 20px',
+              }}
+            >
+              {/* Floor Objects / Elements (Tables, Reception, Partitions, Walls, Doors) */}
+              {elements.map((el) => {
+                // If element is hidden and we are in Live Shifts mode, do NOT render it
+                if (el.isHidden && builderMode === 'LIVE_SHIFTS') return null;
 
-            {/* Seats */}
-            {seats.map((seat) => {
-              const isSelected = selectedSeat?.id === seat.id;
-              return (
-                <div
-                  key={seat.id}
-                  onMouseDown={(e) => handleMouseDownSeat(e, seat)}
-                  onClick={() => setSelectedSeat(seat)}
-                  style={{
-                    left: `${seat.x}px`,
-                    top: `${seat.y}px`,
-                    width: `${seat.width || 70}px`,
-                    height: `${seat.height || 65}px`,
-                    transform: `rotate(${seat.rotation || 0}deg)`,
-                  }}
-                  className={`absolute rounded-xl border flex flex-col justify-between p-1.5 transition-all shadow-xs ${
-                    isSelected
-                      ? 'border-blue-600 ring-3 ring-blue-500/30 z-20 shadow-md bg-white'
-                      : 'border-slate-300 bg-white hover:border-slate-400 hover:shadow-sm z-10'
-                  } ${builderMode === 'BUILDER' ? 'cursor-move' : 'cursor-pointer'}`}
-                >
-                  {/* Seat Number Top Bar */}
-                  <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-800 leading-none">
-                    <span className="font-mono">{seat.seatNumber}</span>
-                    {seat.isFullDayOccupied ? (
-                      <span className="px-1 py-0.2 bg-purple-600 text-white rounded text-[8px] font-black">
-                        FULL DAY
-                      </span>
-                    ) : seat.type === 'PREMIUM' ? (
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Premium Desk" />
-                    ) : null}
+                const isSelected = selectedElement?.id === el.id && builderMode === 'BUILDER';
+                const props = el.properties || {};
+
+                return (
+                  <div
+                    key={el.id}
+                    onMouseDown={(e) => handleMouseDownElement(e, el)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (builderMode === 'BUILDER') {
+                        setSelectedElement(el);
+                        setSelectedSeat(null);
+                      }
+                    }}
+                    style={{
+                      left: `${el.x}px`,
+                      top: `${el.y}px`,
+                      width: `${el.width}px`,
+                      height: `${el.height}px`,
+                      transform: `rotate(${el.rotation}deg)`,
+                      backgroundColor: props.bgColor || (el.type === 'TABLE' ? '#fef3c7' : el.type === 'WALL' ? '#334155' : el.type === 'RECEPTION' ? '#e0f2fe' : '#f1f5f9'),
+                      borderColor: props.borderColor || (el.type === 'TABLE' ? '#f59e0b' : el.type === 'WALL' ? '#0f172a' : el.type === 'RECEPTION' ? '#0284c7' : '#94a3b8'),
+                      borderWidth: `${props.borderWidth ?? (el.type === 'TABLE' ? 2 : 1)}px`,
+                      borderStyle: el.type === 'DOOR' ? 'dashed' : 'solid',
+                      borderRadius: `${props.borderRadius ?? 6}px`,
+                      color: props.textColor || (el.type === 'WALL' ? '#f8fafc' : '#1e293b'),
+                      fontSize: `${props.fontSize || 11}px`,
+                      fontWeight: (props.fontWeight as any) || 'bold',
+                      textAlign: (props.textAlign as any) || 'center',
+                      opacity: el.isHidden ? 0.35 : 1,
+                    }}
+                    className={`absolute flex items-center justify-center tracking-wider transition-shadow ${
+                      isSelected
+                        ? 'ring-2 ring-blue-500 shadow-xl cursor-move z-30'
+                        : builderMode === 'BUILDER'
+                        ? 'cursor-move hover:ring-1 hover:ring-blue-300 z-10'
+                        : 'z-10'
+                    }`}
+                  >
+                    <span className="truncate px-1.5 flex items-center space-x-1">
+                      {el.isHidden && <EyeOff className="w-3 h-3 text-slate-400 inline" />}
+                      <span>{el.label}</span>
+                      {el.isHidden && <span className="text-[9px] text-slate-400 font-normal">(Hidden)</span>}
+                    </span>
                   </div>
+                );
+              })}
 
-                  {/* Three Independent Shift Sections Per Seat */}
-                  {builderMode === 'LIVE_SHIFTS' ? (
-                    <div className="flex flex-col gap-1 mt-1">
+              {/* Seats with Simple Numeric Numbering (1, 2, 3...) */}
+              {seats.map((seat) => {
+                const isSelected = selectedSeat?.id === seat.id;
+                const props = seat.properties || {};
+
+                return (
+                  <div
+                    key={seat.id}
+                    onMouseDown={(e) => handleMouseDownSeat(e, seat)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSeat(seat);
+                      setSelectedElement(null);
+                    }}
+                    style={{
+                      left: `${seat.x}px`,
+                      top: `${seat.y}px`,
+                      width: `${seat.width || 70}px`,
+                      height: `${seat.height || 65}px`,
+                      transform: `rotate(${seat.rotation || 0}deg)`,
+                      borderRadius: `${props.borderRadius ?? 12}px`,
+                      backgroundColor: props.bgColor || '#ffffff',
+                      borderColor: props.borderColor || (isSelected ? '#2563eb' : '#cbd5e1'),
+                      borderWidth: `${props.borderWidth ?? 1}px`,
+                      color: props.textColor || '#0f172a',
+                    }}
+                    className={`absolute flex flex-col justify-between p-1.5 transition-all shadow-xs ${
+                      isSelected
+                        ? 'border-blue-600 ring-3 ring-blue-500/30 z-20 shadow-md'
+                        : 'hover:border-slate-400 hover:shadow-sm z-10'
+                    } ${builderMode === 'BUILDER' ? 'cursor-move' : 'cursor-pointer'}`}
+                  >
+                    {/* Simple Numeric Seat Number Top Bar */}
+                    <div className="flex items-center justify-between leading-none">
+                      <span
+                        className="font-mono font-black"
+                        style={{ fontSize: `${props.fontSize ?? 12}px` }}
+                      >
+                        {seat.seatNumber}
+                      </span>
                       {seat.isFullDayOccupied ? (
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedSeat(seat);
-                          }}
-                          className="h-10 rounded bg-emerald-600 text-white flex flex-col justify-center items-center px-1 text-[8px] font-black shadow-xs cursor-pointer hover:bg-emerald-700 transition"
-                          title={`Full-Day Dedicated Occupant: ${seat.fullDayStudent?.fullName || 'Member'}`}
-                        >
-                          <span className="truncate max-w-[65px] font-bold">
-                            {seat.fullDayStudent?.fullName?.split(' ')[0] || 'FULL DAY'}
-                          </span>
-                          <span className="text-[7px] text-emerald-100 font-mono">
-                            {seat.fullDayStudent?.admissionNumber || 'ALL 3 SHIFTS'}
-                          </span>
-                        </div>
-                      ) : (
-                        seat.shifts?.map((shift) => (
+                        <span className="px-1 py-0.2 bg-purple-600 text-white rounded text-[7px] font-black">
+                          FULL DAY
+                        </span>
+                      ) : seat.type === 'PREMIUM' ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Premium Desk" />
+                      ) : null}
+                    </div>
+
+                    {/* Three Independent Shift Sections Per Seat */}
+                    {builderMode === 'LIVE_SHIFTS' ? (
+                      <div className="flex flex-col gap-1 mt-1">
+                        {seat.isFullDayOccupied ? (
                           <div
-                            key={shift.shiftId}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (shift.isBooked) {
-                                setSelectedSeat(seat);
-                              } else {
-                                openBookingModal(seat, shift.shiftId);
-                              }
+                              setSelectedSeat(seat);
                             }}
-                            title={
-                              shift.isBooked
-                                ? `Booked by: ${shift.booking?.studentName} (${shift.booking?.admissionNumber})`
-                                : `Available for ${shift.shiftName}. Click to Book!`
-                            }
-                            className={`h-3 rounded flex items-center justify-between px-1 text-[8px] font-bold tracking-tight transition cursor-pointer ${
-                              shift.isBooked
-                                ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                                : 'bg-rose-500 text-white hover:bg-rose-600'
-                            }`}
+                            className="rounded bg-emerald-600 text-white flex flex-col justify-center items-center px-1 shadow-xs cursor-pointer hover:bg-emerald-700 transition"
+                            style={{ height: `${(props.indicatorHeight ?? 12) * 2.8}px` }}
+                            title={`Full-Day Dedicated: ${seat.fullDayStudent?.fullName || 'Member'}`}
                           >
-                            <span className="truncate">
-                              {shift.shiftCode.charAt(0)}: {shift.isBooked ? shift.booking?.studentName?.split(' ')[0] : 'FREE'}
+                            <span
+                              className="truncate max-w-[65px] font-bold"
+                              style={{ fontSize: `${props.studentFontSize ?? 8}px` }}
+                            >
+                              {seat.fullDayStudent?.fullName?.split(' ')[0] || 'FULL DAY'}
+                            </span>
+                            <span className="text-[7px] text-emerald-100 font-mono">
+                              {seat.fullDayStudent?.admissionNumber || 'ALL 3 SHIFTS'}
                             </span>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center text-slate-400">
-                      <Armchair className="w-5 h-5" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                        ) : (
+                          seat.shifts?.map((shift) => (
+                            <div
+                              key={shift.shiftId}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (shift.isBooked) {
+                                  setSelectedSeat(seat);
+                                } else {
+                                  openBookingModal(seat, shift.shiftId);
+                                }
+                              }}
+                              title={
+                                shift.isBooked
+                                  ? `Booked by: ${shift.booking?.studentName} (${shift.booking?.admissionNumber})`
+                                  : `Available for ${shift.shiftName}. Click to Book!`
+                              }
+                              style={{
+                                height: `${props.indicatorHeight ?? 12}px`,
+                                fontSize: `${props.shiftFontSize ?? 8}px`,
+                              }}
+                              className={`rounded flex items-center justify-between px-1 font-bold tracking-tight transition cursor-pointer ${
+                                shift.isBooked
+                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  : 'bg-rose-500 text-white hover:bg-rose-600'
+                              }`}
+                            >
+                              <span className="truncate">
+                                {shift.shiftCode.charAt(0)}: {shift.isBooked ? shift.booking?.studentName?.split(' ')[0] : 'FREE'}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-slate-400">
+                        <Armchair className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Seat / Element Inspector Floating Panel */}
-          {selectedSeat && (
-            <div className="absolute right-4 top-4 w-80 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-5 shadow-xl z-30 space-y-4">
+          {/* INSPECTOR PANEL 1: FLOOR ELEMENT INSPECTOR */}
+          {selectedElement && builderMode === 'BUILDER' && (
+            <div className="absolute right-4 top-4 w-84 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-5 shadow-2xl z-30 space-y-4 max-h-[720px] overflow-y-auto">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm">
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-xs">
+                    <Sliders className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900">Object Settings</h3>
+                    <p className="text-[11px] text-slate-400 capitalize">{selectedElement.type.toLowerCase()}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedElement(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Label */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Object Label</label>
+                <input
+                  type="text"
+                  value={selectedElement.label || ''}
+                  onChange={(e) => handleUpdateElement({ label: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Size Controls: Width & Height */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700">Object Size (px)</label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {/* Width */}
+                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 font-semibold block mb-1">Width</span>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => handleUpdateElement({ width: Math.max(30, selectedElement.width - 10) })}
+                        className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="20"
+                        max="800"
+                        value={selectedElement.width}
+                        onChange={(e) => handleUpdateElement({ width: Number(e.target.value) })}
+                        className="w-full text-center bg-white border border-slate-200 rounded py-0.5 font-mono font-bold"
+                      />
+                      <button
+                        onClick={() => handleUpdateElement({ width: Math.min(800, selectedElement.width + 10) })}
+                        className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Height */}
+                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-500 font-semibold block mb-1">Height</span>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => handleUpdateElement({ height: Math.max(10, selectedElement.height - 10) })}
+                        className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="10"
+                        max="800"
+                        value={selectedElement.height}
+                        onChange={(e) => handleUpdateElement({ height: Number(e.target.value) })}
+                        className="w-full text-center bg-white border border-slate-200 rounded py-0.5 font-mono font-bold"
+                      />
+                      <button
+                        onClick={() => handleUpdateElement({ height: Math.min(800, selectedElement.height + 10) })}
+                        className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Size Presets */}
+                <div className="flex items-center gap-1.5 pt-1">
+                  <button
+                    onClick={() => handleUpdateElement({ width: 140, height: 40 })}
+                    className="flex-1 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-semibold text-slate-700"
+                  >
+                    Small
+                  </button>
+                  <button
+                    onClick={() => handleUpdateElement({ width: 220, height: 50 })}
+                    className="flex-1 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-semibold text-slate-700"
+                  >
+                    Medium
+                  </button>
+                  <button
+                    onClick={() => handleUpdateElement({ width: 340, height: 65 })}
+                    className="flex-1 py-1 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-semibold text-slate-700"
+                  >
+                    Large
+                  </button>
+                </div>
+              </div>
+
+              {/* Font Size & Alignment */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700">Text Typography</label>
+                <div className="flex items-center gap-1.5">
+                  {[9, 11, 13, 16].map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => handleUpdateElement({ properties: { fontSize: sz } })}
+                      className={`flex-1 py-1 rounded-lg text-xs font-bold border transition ${
+                        (selectedElement.properties?.fontSize || 11) === sz
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {sz}px
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  {/* Font Weight */}
+                  <button
+                    onClick={() =>
+                      handleUpdateElement({
+                        properties: {
+                          fontWeight: selectedElement.properties?.fontWeight === 'bold' ? 'normal' : 'bold',
+                        },
+                      })
+                    }
+                    className={`flex-1 py-1 rounded-lg text-xs font-bold border transition ${
+                      selectedElement.properties?.fontWeight === 'bold'
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Bold Text
+                  </button>
+
+                  {/* Text Align */}
+                  {['left', 'center', 'right'].map((align) => (
+                    <button
+                      key={align}
+                      onClick={() => handleUpdateElement({ properties: { textAlign: align } })}
+                      className={`flex-1 py-1 rounded-lg text-[10px] uppercase font-bold border transition ${
+                        (selectedElement.properties?.textAlign || 'center') === align
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {align}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color Swatches */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700">Color Palette</label>
+                <div className="flex items-center gap-2">
+                  {[
+                    { bg: '#fef3c7', border: '#f59e0b', text: '#78350f', name: 'Amber' },
+                    { bg: '#e0f2fe', border: '#0284c7', text: '#0369a1', name: 'Blue' },
+                    { bg: '#ecfdf5', border: '#10b981', text: '#065f46', name: 'Green' },
+                    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8', name: 'Purple' },
+                    { bg: '#334155', border: '#0f172a', text: '#f8fafc', name: 'Slate' },
+                    { bg: '#ffffff', border: '#cbd5e1', text: '#0f172a', name: 'White' },
+                  ].map((c) => (
+                    <button
+                      key={c.name}
+                      onClick={() =>
+                        handleUpdateElement({
+                          properties: {
+                            bgColor: c.bg,
+                            borderColor: c.border,
+                            textColor: c.text,
+                          },
+                        })
+                      }
+                      style={{ backgroundColor: c.bg, borderColor: c.border }}
+                      className="w-7 h-7 rounded-lg border-2 shadow-xs hover:scale-110 transition"
+                      title={c.name}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Hide / Show Object */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700">Visibility:</span>
+                <button
+                  onClick={() => handleToggleHideElement(selectedElement)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition ${
+                    selectedElement.isHidden
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {selectedElement.isHidden ? (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span>Hidden (Click to Show)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Visible (Click to Hide)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Actions: Duplicate & Delete */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => handleDuplicateElement(selectedElement)}
+                  className="flex-1 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold flex items-center justify-center space-x-1"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Duplicate</span>
+                </button>
+                <button
+                  onClick={() => handleDeleteElement(selectedElement)}
+                  className="flex-1 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center justify-center space-x-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Object</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* INSPECTOR PANEL 2: SEAT INSPECTOR (Live View OR Builder Mode) */}
+          {selectedSeat && (
+            <div className="absolute right-4 top-4 w-84 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-5 shadow-2xl z-30 space-y-4 max-h-[720px] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm">
                     {selectedSeat.seatNumber}
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-sm text-slate-900">Seat Details</h3>
+                    <h3 className="font-extrabold text-sm text-slate-900">Seat {selectedSeat.seatNumber}</h3>
                     <p className="text-[11px] text-slate-400 capitalize">{selectedSeat.type.toLowerCase()} Desk</p>
                   </div>
                 </div>
@@ -877,6 +1696,123 @@ export const FloorPlanPage: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* BUILDER MODE CONTROLS FOR SEAT */}
+              {builderMode === 'BUILDER' && (
+                <div className="space-y-3.5 pb-3 border-b border-slate-100">
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Seat Customization
+                  </h4>
+
+                  {/* Seat Number (Simple Numeric) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Seat Number (Simple Numeric)
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedSeat.seatNumber}
+                      onChange={(e) => handleUpdateSeat({ seatNumber: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. 1, 2, 3"
+                    />
+                  </div>
+
+                  {/* Seat Type */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Seat Type</label>
+                    <select
+                      value={selectedSeat.type}
+                      onChange={(e) => handleUpdateSeat({ type: e.target.value as any })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none"
+                    >
+                      <option value="STANDARD">Standard Desk</option>
+                      <option value="PREMIUM">Premium Desk</option>
+                      <option value="CABIN">Private Cabin</option>
+                      <option value="CORNER">Corner Desk</option>
+                    </select>
+                  </div>
+
+                  {/* Seat Size */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 font-semibold block mb-1">Width</span>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleUpdateSeat({ width: Math.max(50, (selectedSeat.width || 70) - 5) })}
+                          className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                        >
+                          -
+                        </button>
+                        <span className="w-full text-center font-mono font-bold">{selectedSeat.width || 70}px</span>
+                        <button
+                          onClick={() => handleUpdateSeat({ width: Math.min(140, (selectedSeat.width || 70) + 5) })}
+                          className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 font-semibold block mb-1">Height</span>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleUpdateSeat({ height: Math.max(45, (selectedSeat.height || 65) - 5) })}
+                          className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                        >
+                          -
+                        </button>
+                        <span className="w-full text-center font-mono font-bold">{selectedSeat.height || 65}px</span>
+                        <button
+                          onClick={() => handleUpdateSeat({ height: Math.min(140, (selectedSeat.height || 65) + 5) })}
+                          className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seat Font Size */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Number Font Size</label>
+                    <div className="flex items-center gap-1.5">
+                      {[11, 13, 15, 18].map((fs) => (
+                        <button
+                          key={fs}
+                          onClick={() => handleUpdateSeat({ properties: { fontSize: fs } })}
+                          className={`flex-1 py-1 rounded-lg text-xs font-bold border transition ${
+                            (selectedSeat.properties?.fontSize || 13) === fs
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {fs}px
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Duplicate & Delete Seat */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => handleDuplicateSeat(selectedSeat)}
+                      className="flex-1 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold flex items-center justify-center space-x-1"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Duplicate</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSeat(selectedSeat.id)}
+                      className="flex-1 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center justify-center space-x-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Seat</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Full-Day Dedicated Banner if Applicable */}
               {selectedSeat.isFullDayOccupied && selectedSeat.fullDayStudent && (
@@ -972,22 +1908,6 @@ export const FloorPlanPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-
-              {/* Builder Controls for Selected Seat */}
-              {builderMode === 'BUILDER' && (
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <button
-                    onClick={() => handleDeleteSeat(selectedSeat.id)}
-                    className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center space-x-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Seat</span>
-                  </button>
-                  <span className="text-[10px] text-slate-400">
-                    X: {selectedSeat.x}, Y: {selectedSeat.y}
-                  </span>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -996,7 +1916,6 @@ export const FloorPlanPage: React.FC = () => {
       {/* VIEW MODE 2: RESPONSIVE GRID CARD VIEW */}
       {viewMode === 'GRID' && (
         <div className="space-y-4">
-          {/* Filters */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs">
             <div className="relative flex-1 min-w-[240px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1032,7 +1951,7 @@ export const FloorPlanPage: React.FC = () => {
               >
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center space-x-2">
-                    <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-800 font-extrabold flex items-center justify-center text-sm">
+                    <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-800 font-extrabold flex items-center justify-center text-sm font-mono">
                       {seat.seatNumber}
                     </span>
                     <span className="text-xs text-slate-400 font-medium">{seat.type}</span>
@@ -1050,7 +1969,6 @@ export const FloorPlanPage: React.FC = () => {
                   </span>
                 </div>
 
-                {/* 3 Shifts List */}
                 <div className="py-3 space-y-2">
                   {seat.shifts?.map((sh) => (
                     <div
@@ -1165,7 +2083,72 @@ export const FloorPlanPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 1: QUICK SETUP WIZARD */}
+      {/* MODAL 1: RENUMBER SEATS MODAL */}
+      {showRenumberModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2 text-blue-600 font-bold">
+                <Hash className="w-5 h-5" />
+                <h3 className="text-base text-slate-900">Renumber Seats</h3>
+              </div>
+              <button onClick={() => setShowRenumberModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Renumber all seats in this room sequentially (1, 2, 3...) starting from your chosen number.
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Starting Number</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={renumberStart}
+                  onChange={(e) => setRenumberStart(Number(e.target.value))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Ordering Mode</label>
+                <select
+                  value={renumberSort}
+                  onChange={(e: any) => setRenumberSort(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                >
+                  <option value="POSITION">By Position (Row-by-Row, Top to Bottom)</option>
+                  <option value="CURRENT">Keep Current Numeric Sequence</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-3 bg-blue-50 rounded-xl text-blue-800 text-xs">
+              Will sequentially update <strong>{seats.length}</strong> seats starting at <strong>{renumberStart}</strong>.
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setShowRenumberModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExecuteRenumber}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-sm"
+              >
+                Renumber Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: QUICK SETUP WIZARD */}
       {showWizardModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -1180,7 +2163,7 @@ export const FloorPlanPage: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-500">
-              Automatically generate an organized grid of seats with custom prefixes and row labels.
+              Automatically generate an organized grid of seats with pure numeric numbering (1, 2, 3...).
             </p>
 
             <div className="grid grid-cols-2 gap-4 text-xs">
@@ -1192,7 +2175,7 @@ export const FloorPlanPage: React.FC = () => {
                   max="15"
                   value={wizardRows}
                   onChange={(e) => setWizardRows(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold"
                 />
               </div>
               <div>
@@ -1203,34 +2186,35 @@ export const FloorPlanPage: React.FC = () => {
                   max="15"
                   value={wizardCols}
                   onChange={(e) => setWizardCols(Number(e.target.value))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold"
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Prefix Scheme</label>
+                <label className="block font-bold text-slate-700 mb-1">Starting Number</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={wizardStartNum}
+                  onChange={(e) => setWizardStartNum(Number(e.target.value))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Numbering Style</label>
                 <select
-                  value={wizardPrefixType}
-                  onChange={(e: any) => setWizardPrefixType(e.target.value)}
+                  value={wizardNumberingPattern}
+                  onChange={(e: any) => setWizardNumberingPattern(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
                 >
-                  <option value="LETTERS">Letters (A-01, B-01)</option>
-                  <option value="NUMBERS">Sequential (S-01, S-02)</option>
+                  <option value="NUMERIC">Pure Numeric (1, 2, 3...)</option>
+                  <option value="ALPHA_ROW">Alphabetical Rows (A1, B1...)</option>
                 </select>
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Custom Prefix (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. HALL-A"
-                  value={wizardPrefix}
-                  onChange={(e) => setWizardPrefix(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                />
               </div>
             </div>
 
             <div className="p-3 bg-purple-50 rounded-xl text-purple-800 text-xs">
-              Will generate <strong>{wizardRows * wizardCols}</strong> organized seats into Room.
+              Will generate <strong>{wizardRows * wizardCols}</strong> organized seats (from {wizardStartNum} to{' '}
+              {wizardStartNum + wizardRows * wizardCols - 1}) into this room.
             </div>
 
             <div className="flex items-center justify-end space-x-2 pt-2">
@@ -1251,7 +2235,7 @@ export const FloorPlanPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 2: SEAT BOOKING MODAL */}
+      {/* MODAL 3: SEAT BOOKING MODAL */}
       {showBookingModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -1269,7 +2253,6 @@ export const FloorPlanPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleConfirmBooking} className="space-y-4 text-xs">
-              {/* Search Student */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Select Student</label>
                 <div className="relative">
@@ -1283,7 +2266,6 @@ export const FloorPlanPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Dropdown Options */}
                 {studentOptions.length > 0 && (
                   <div className="mt-1 bg-white border border-slate-200 rounded-xl max-h-36 overflow-y-auto divide-y divide-slate-100 shadow-lg">
                     {studentOptions.map((st) => (
@@ -1304,7 +2286,6 @@ export const FloorPlanPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Fee Plan */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Fee Plan</label>
                 <select
@@ -1327,7 +2308,6 @@ export const FloorPlanPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Pricing & Dates */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Start Date</label>
@@ -1351,7 +2331,6 @@ export const FloorPlanPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payment Details */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Amount Paid Today (₹)</label>
@@ -1397,7 +2376,7 @@ export const FloorPlanPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 3: SEAT TRANSFER MODAL */}
+      {/* MODAL 4: SEAT TRANSFER MODAL */}
       {showTransferModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -1422,7 +2401,7 @@ export const FloorPlanPage: React.FC = () => {
                     .filter((s) => s.id !== selectedSeat?.id)
                     .map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.seatNumber} ({s.type})
+                        Seat {s.seatNumber} ({s.type})
                       </option>
                     ))}
                 </select>

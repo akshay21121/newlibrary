@@ -85,6 +85,17 @@ export interface Seat {
     phone?: string;
     photoUrl?: string | null;
   } | null;
+  properties?: {
+    fontSize?: number;
+    shiftFontSize?: number;
+    studentFontSize?: number;
+    indicatorHeight?: number;
+    borderRadius?: number;
+    bgColor?: string;
+    borderColor?: string;
+    borderWidth?: number;
+    textColor?: string;
+  };
   floorName?: string;
   roomName?: string;
 }
@@ -114,14 +125,24 @@ export interface FloorElement {
   id: string;
   floorId: string;
   roomId: string;
-  type: 'TABLE' | 'WALL' | 'DOOR' | 'PILLAR' | 'PARTITION';
+  type: 'TABLE' | 'WALL' | 'DOOR' | 'PILLAR' | 'PARTITION' | 'RECEPTION' | 'CUSTOM';
   label?: string | null;
   x: number;
   y: number;
   width: number;
   height: number;
   rotation: number;
-  properties?: any;
+  isHidden?: boolean;
+  properties?: {
+    fontSize?: number;
+    fontWeight?: string;
+    textAlign?: string;
+    bgColor?: string;
+    borderColor?: string;
+    borderWidth?: number;
+    textColor?: string;
+    borderRadius?: number;
+  };
 }
 
 export interface Student {

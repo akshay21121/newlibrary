@@ -501,7 +501,7 @@ async function main() {
 
   console.log(`✅ ${createdPlans.length} Membership Fee Plans created (Shift-Based & Full-Day across 1, 3, 4, 6 months).`);
 
-  // 7. Generate a grid of 24 Seats in Room A
+  // 7. Generate a grid of 24 Seats in Room A with simple numeric numbering: 1, 2, 3, 4, 5...
   const seatList = [];
   const rows = 4;
   const cols = 6;
@@ -510,10 +510,13 @@ async function main() {
   const spacingX = 180;
   const spacingY = 160;
 
+  // Clear any existing seats if re-seeding
+  await prisma.seat.deleteMany({ where: { roomId: roomA.id } });
+
+  let seatCounter = 1;
   for (let r = 0; r < rows; r++) {
-    const rowChar = String.fromCharCode(65 + r); // A, B, C, D
     for (let c = 1; c <= cols; c++) {
-      const seatNum = `${rowChar}-${c < 10 ? '0' + c : c}`;
+      const seatNum = `${seatCounter}`;
       const seat = await prisma.seat.create({
         data: {
           floorId: floor1.id,
@@ -523,14 +526,23 @@ async function main() {
           y: startY + r * spacingY,
           width: 70,
           height: 65,
-          type: (r === 0 && c === 1) ? 'PREMIUM' : 'STANDARD',
+          type: seatCounter === 1 ? 'PREMIUM' : 'STANDARD',
+          properties: JSON.stringify({
+            fontSize: 14,
+            shiftFontSize: 8,
+            studentFontSize: 8,
+            indicatorHeight: 12,
+            borderRadius: 12,
+          }),
         },
       });
       seatList.push(seat);
+      seatCounter++;
     }
   }
 
   // Also add some visual floor elements (Reception Desk, Partitions)
+  await prisma.floorElement.deleteMany({ where: { roomId: roomA.id } });
   await prisma.floorElement.createMany({
     data: [
       {
@@ -542,6 +554,17 @@ async function main() {
         y: 30,
         width: 320,
         height: 50,
+        isHidden: false,
+        properties: JSON.stringify({
+          fontSize: 12,
+          fontWeight: 'bold',
+          textAlign: 'center',
+          bgColor: '#fef3c7',
+          borderColor: '#f59e0b',
+          borderWidth: 2,
+          textColor: '#78350f',
+          borderRadius: 8,
+        }),
       },
       {
         floorId: floor1.id,
@@ -552,6 +575,17 @@ async function main() {
         y: 30,
         width: 400,
         height: 15,
+        isHidden: false,
+        properties: JSON.stringify({
+          fontSize: 10,
+          fontWeight: 'normal',
+          textAlign: 'center',
+          bgColor: '#334155',
+          borderColor: '#0f172a',
+          borderWidth: 1,
+          textColor: '#f8fafc',
+          borderRadius: 4,
+        }),
       },
       {
         floorId: floor1.id,
@@ -560,13 +594,24 @@ async function main() {
         label: 'Entrance Door',
         x: 40,
         y: 40,
-        width: 40,
-        height: 40,
+        width: 45,
+        height: 45,
+        isHidden: false,
+        properties: JSON.stringify({
+          fontSize: 9,
+          fontWeight: 'bold',
+          textAlign: 'center',
+          bgColor: '#dbeafe',
+          borderColor: '#3b82f6',
+          borderWidth: 2,
+          textColor: '#1e40af',
+          borderRadius: 6,
+        }),
       },
     ],
   });
 
-  console.log(`✅ Created ${seatList.length} seats and floor elements in Hall A.`);
+  console.log(`✅ Created ${seatList.length} numeric seats (1 to ${seatList.length}) and floor elements in Hall A.`);
 
   // 8. Sample Students (using upsert)
   const today = new Date();
@@ -669,17 +714,17 @@ async function main() {
   await prisma.seatBookingHistory.deleteMany();
   await prisma.seatBooking.deleteMany();
 
-  // 9. Bookings for Seat A-01, A-02, and A-03
-  const seatA01 = await prisma.seat.findFirst({ where: { seatNumber: 'A-01' } });
-  const seatA02 = await prisma.seat.findFirst({ where: { seatNumber: 'A-02' } });
-  const seatA03 = await prisma.seat.findFirst({ where: { seatNumber: 'A-03' } });
+  // 9. Bookings for Seat 1, Seat 2, and Seat 3 (Numeric Seats)
+  const seat1 = await prisma.seat.findFirst({ where: { seatNumber: '1' } });
+  const seat2 = await prisma.seat.findFirst({ where: { seatNumber: '2' } });
+  const seat3 = await prisma.seat.findFirst({ where: { seatNumber: '3' } });
 
-  if (seatA01 && seatA02 && seatA03) {
-    // Booking 1: Aarav -> Seat A-01, Morning Shift
+  if (seat1 && seat2 && seat3) {
+    // Booking 1: Aarav -> Seat 1, Morning Shift
     const booking1 = await prisma.seatBooking.create({
       data: {
         studentId: student1.id,
-        seatId: seatA01.id,
+        seatId: seat1.id,
         shiftId: morningShift.id,
         feePlanId: morningPlan.id,
         membershipCategory: 'SHIFT_BASED',
@@ -695,11 +740,11 @@ async function main() {
       data: {
         bookingId: booking1.id,
         studentId: student1.id,
-        seatId: seatA01.id,
+        seatId: seat1.id,
         shiftId: morningShift.id,
         membershipCategory: 'SHIFT_BASED',
         actionType: 'BOOKED',
-        remarks: 'Morning Shift admission booking',
+        remarks: 'Morning Shift admission booking on Seat 1',
       },
     });
 
@@ -739,11 +784,11 @@ async function main() {
       },
     });
 
-    // Booking 2: Priya -> Seat A-01, Evening Shift
+    // Booking 2: Priya -> Seat 1, Evening Shift
     const booking2 = await prisma.seatBooking.create({
       data: {
         studentId: student2.id,
-        seatId: seatA01.id,
+        seatId: seat1.id,
         shiftId: eveningShift.id,
         feePlanId: eveningPlan.id,
         membershipCategory: 'SHIFT_BASED',
@@ -759,11 +804,11 @@ async function main() {
       data: {
         bookingId: booking2.id,
         studentId: student2.id,
-        seatId: seatA01.id,
+        seatId: seat1.id,
         shiftId: eveningShift.id,
         membershipCategory: 'SHIFT_BASED',
         actionType: 'BOOKED',
-        remarks: 'Evening Shift booked on Seat A-01',
+        remarks: 'Evening Shift booked on Seat 1',
       },
     });
 
@@ -802,11 +847,11 @@ async function main() {
       },
     });
 
-    // Booking 3: Rohan -> Seat A-02, Afternoon Shift
+    // Booking 3: Rohan -> Seat 2, Afternoon Shift
     const booking3 = await prisma.seatBooking.create({
       data: {
         studentId: student3.id,
-        seatId: seatA02.id,
+        seatId: seat2.id,
         shiftId: afternoonShift.id,
         feePlanId: afternoonPlan.id,
         membershipCategory: 'SHIFT_BASED',
@@ -822,11 +867,11 @@ async function main() {
       data: {
         bookingId: booking3.id,
         studentId: student3.id,
-        seatId: seatA02.id,
+        seatId: seat2.id,
         shiftId: afternoonShift.id,
         membershipCategory: 'SHIFT_BASED',
         actionType: 'BOOKED',
-        remarks: 'Seat A-02 Afternoon Shift admission',
+        remarks: 'Seat 2 Afternoon Shift admission',
       },
     });
 
@@ -853,8 +898,8 @@ async function main() {
       },
     });
 
-    // Booking 4: Vikram Malhotra -> Seat A-03, FULL-DAY DEDICATED (All 3 Shifts Reserved!)
-    const fullDayBookingGroupId = 'full-day-booking-group-a03';
+    // Booking 4: Vikram Malhotra -> Seat 3, FULL-DAY DEDICATED (All 3 Shifts Reserved!)
+    const fullDayBookingGroupId = 'full-day-booking-group-seat3';
     const shiftsToBook = [morningShift, afternoonShift, eveningShift];
 
     for (const sh of shiftsToBook) {
@@ -862,7 +907,7 @@ async function main() {
         data: {
           bookingGroupId: fullDayBookingGroupId,
           studentId: student4.id,
-          seatId: seatA03.id,
+          seatId: seat3.id,
           shiftId: sh.id,
           feePlanId: fullDayPlan.id,
           membershipCategory: 'FULL_DAY',
@@ -879,7 +924,7 @@ async function main() {
           bookingId: fullDayBooking.id,
           bookingGroupId: fullDayBookingGroupId,
           studentId: student4.id,
-          seatId: seatA03.id,
+          seatId: seat3.id,
           shiftId: sh.id,
           membershipCategory: 'FULL_DAY',
           actionType: 'BOOKED',
@@ -908,7 +953,7 @@ async function main() {
         balanceAmount: 0,
         dueDate: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000),
         status: 'PAID',
-        notes: 'Full-Day Dedicated Desk membership (All 3 Shifts reserved for Seat A-03)',
+        notes: 'Full-Day Dedicated Desk membership (All 3 Shifts reserved for Seat 3)',
       },
     });
 
@@ -925,7 +970,7 @@ async function main() {
       },
     });
 
-    console.log('✅ Created Full-Day Dedicated booking on Seat A-03 for Vikram Malhotra.');
+    console.log('✅ Created Full-Day Dedicated booking on Seat 3 for Vikram Malhotra.');
   }
 
   console.log('✅ Sample Bookings, Invoices, and Payments seeded.');

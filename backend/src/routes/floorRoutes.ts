@@ -7,6 +7,7 @@ import {
   saveRoomLayout,
   runLayoutWizard,
   deleteSeat,
+  renumberSeats,
 } from '../controllers/floorController.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -20,6 +21,7 @@ router.post('/:floorId/rooms', createRoom);
 router.get('/rooms/:roomId/layout', getRoomLayout);
 router.put('/rooms/:roomId/layout', saveRoomLayout);
 router.post('/rooms/:roomId/wizard', runLayoutWizard);
+router.post('/rooms/:roomId/renumber', renumberSeats);
 router.delete('/seats/:seatId', deleteSeat);
 
 export default router;
