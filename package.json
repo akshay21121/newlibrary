@@ -14,6 +14,9 @@
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run build:backend && npm run build:frontend",
     "start": "npm --prefix backend run start",
+    "prisma:push": "npm --prefix backend run prisma:push",
+    "prisma:seed": "npm --prefix backend run prisma:seed",
+    "prisma:generate": "npm --prefix backend run prisma:generate",
     "test": "npm --prefix backend run test",
     "backup": "node backend/scripts/backup.js",
     "restore": "node backend/scripts/restore.js"
