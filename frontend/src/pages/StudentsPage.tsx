@@ -42,9 +42,16 @@ export const StudentsPage: React.FC = () => {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [shiftFilter, setShiftFilter] = useState('');
   const [shifts, setShifts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const s = searchParams.get('status');
+    if (s !== null) {
+      setStatusFilter(s);
+    }
+  }, [searchParams]);
 
   // Modals
   const [showAdmissionModal, setShowAdmissionModal] = useState(searchParams.get('action') === 'new');
