@@ -26,6 +26,9 @@ import {
   Moon,
   Tag,
   ShieldCheck,
+  ArrowLeft,
+  ArrowRight,
+  UserCheck,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { Student, FeePlan } from '../types/index.js';
@@ -78,6 +81,7 @@ export const StudentsPage: React.FC = () => {
     paymentMethod: 'CASH',
   });
 
+  const [admissionStep, setAdmissionStep] = useState<1 | 2 | 3>(1);
   const [admissionDurationFilter, setAdmissionDurationFilter] = useState<number>(1);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [kycFile, setKycFile] = useState<File | null>(null);
@@ -136,9 +140,37 @@ export const StudentsPage: React.FC = () => {
     fetchStudents();
   };
 
+  const handleNextStep1 = () => {
+    if (!formData.fullName.trim()) {
+      alert('Please enter student Full Name');
+      return;
+    }
+    if (!formData.phone.trim() || formData.phone.trim().length < 10) {
+      alert('Please enter a valid Mobile Phone number (at least 10 digits)');
+      return;
+    }
+    setAdmissionStep(2);
+  };
+
+  const handleNextStep2 = () => {
+    if (!formData.feePlanId) {
+      alert('Please select a Membership Fee Plan before proceeding');
+      return;
+    }
+    if (!formData.startDate) {
+      alert('Please choose a valid Start Date');
+      return;
+    }
+    setAdmissionStep(3);
+  };
+
   // Submit Admission
   const handleAdmissionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.seatId) {
+      alert('Please select an assigned seat from the Floor Plan Matrix in Step 3');
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -251,7 +283,10 @@ export const StudentsPage: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setShowAdmissionModal(true)}
+          onClick={() => {
+            setAdmissionStep(1);
+            setShowAdmissionModal(true);
+          }}
           className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center space-x-1.5 shadow-sm shadow-emerald-700/20 transition self-start sm:self-auto"
         >
           <UserPlus className="w-4 h-4" />
@@ -482,18 +517,18 @@ export const StudentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL 1: NEW STUDENT ADMISSION (RESPONSIVE VIEWPORT MODAL) */}
+      {/* MODAL 1: NEW STUDENT ADMISSION (3-STEP RESPONSIVE VIEWPORT WIZARD) */}
       {showAdmissionModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 z-50">
           <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* STICKY HEADER */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0 bg-white">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 shrink-0 bg-white">
               <div>
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                   <h3 className="text-base font-extrabold text-slate-900 tracking-tight">New Student Admission</h3>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   Admission sequence number will be automatically generated (e.g. LIB-2026-XXXX)
                 </p>
               </div>
@@ -505,640 +540,771 @@ export const StudentsPage: React.FC = () => {
               </button>
             </div>
 
+            {/* STEP PROGRESS WIZARD BAR */}
+            <div className="grid grid-cols-3 border-b border-slate-100 bg-slate-50/80 text-xs font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setAdmissionStep(1)}
+                className={`py-2.5 px-3 text-center border-b-2 transition flex items-center justify-center space-x-1.5 ${
+                  admissionStep === 1
+                    ? 'border-emerald-600 text-emerald-700 bg-white font-black'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${admissionStep === 1 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>1</span>
+                <span>Student & KYC</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleNextStep1}
+                className={`py-2.5 px-3 text-center border-b-2 transition flex items-center justify-center space-x-1.5 ${
+                  admissionStep === 2
+                    ? 'border-emerald-600 text-emerald-700 bg-white font-black'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${admissionStep === 2 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>2</span>
+                <span>Plan & Duration</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!formData.fullName || !formData.phone) {
+                    alert('Please complete Student Name & Phone in Step 1 first');
+                    setAdmissionStep(1);
+                    return;
+                  }
+                  if (!formData.feePlanId) {
+                    alert('Please select a Membership Fee Plan in Step 2 first');
+                    setAdmissionStep(2);
+                    return;
+                  }
+                  setAdmissionStep(3);
+                }}
+                className={`py-2.5 px-3 text-center border-b-2 transition flex items-center justify-center space-x-1.5 ${
+                  admissionStep === 3
+                    ? 'border-emerald-600 text-emerald-700 bg-white font-black'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${admissionStep === 3 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>3</span>
+                <span>Seat & Payment</span>
+              </button>
+            </div>
+
             {/* FORM CONTAINER WITH SCROLLABLE BODY AND STICKY FOOTER */}
             <form onSubmit={handleAdmissionSubmit} className="flex flex-col flex-1 overflow-hidden">
               {/* SCROLLABLE BODY */}
-              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5 text-xs">
-              {/* Section 1: Personal Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500"
-                    placeholder="e.g. Aditya Sharma"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Mobile Phone *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500"
-                    placeholder="+91 98765 43210"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Email Address</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    placeholder="aditya@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Target Exam / Purpose</label>
-                  <input
-                    type="text"
-                    value={formData.targetExam}
-                    onChange={(e) => setFormData({ ...formData, targetExam: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    placeholder="UPSC, CA, NEET, GATE, etc."
-                  />
-                </div>
-              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 text-xs">
 
-              {/* Section 2: KYC & Identification */}
-              <div className="pt-2 border-t border-slate-100">
-                <h4 className="font-bold text-slate-800 mb-2">Identification & KYC</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">ID Proof Type</label>
-                    <select
-                      value={formData.idProofType}
-                      onChange={(e) => setFormData({ ...formData, idProofType: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    >
-                      <option value="AADHAAR">Aadhaar Card</option>
-                      <option value="PAN">PAN Card</option>
-                      <option value="VOTER_ID">Voter ID</option>
-                      <option value="PASSPORT">Passport</option>
-                      <option value="COLLEGE_ID">College / Student ID</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">ID Proof Number</label>
-                    <input
-                      type="text"
-                      value={formData.idProofNumber}
-                      onChange={(e) => setFormData({ ...formData, idProofNumber: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                      placeholder="e.g. 1234 5678 9012"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Student Photo</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-                      className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">KYC Document (PDF/Image)</label>
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      onChange={(e) => setKycFile(e.target.files?.[0] || null)}
-                      className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Emergency Contact & Address */}
-              <div className="pt-2 border-t border-slate-100">
-                <h4 className="font-bold text-slate-800 mb-2">Emergency Contact & Address</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Contact Name</label>
-                    <input
-                      type="text"
-                      value={formData.emergencyContactName}
-                      onChange={(e) => setFormData({ ...formData, emergencyContactName: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Relation</label>
-                    <input
-                      type="text"
-                      value={formData.emergencyContactRelation}
-                      onChange={(e) => setFormData({ ...formData, emergencyContactRelation: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-600 mb-1">Contact Phone</label>
-                    <input
-                      type="tel"
-                      value={formData.emergencyContactPhone}
-                      onChange={(e) => setFormData({ ...formData, emergencyContactPhone: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <label className="block font-semibold text-slate-600 mb-1">Residential Address</label>
-                  <input
-                    type="text"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    placeholder="House / Flat / Sector / City"
-                  />
-                </div>
-              </div>
-
-              {/* Section 4: Membership Category, Flexible Pricing & Seat Assignment */}
-              <div className="pt-3 border-t border-slate-100 space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-extrabold text-slate-900 flex items-center space-x-1.5">
-                    <Tag className="w-4 h-4 text-emerald-600" />
-                    <span>Membership Category & Admission Plan</span>
-                  </h4>
-                  <span className="text-[11px] text-slate-400">Step 2 to 5</span>
-                </div>
-
-                {/* Category Selection Tabs */}
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newCat = 'SHIFT_BASED';
-                      const defaultShift = shifts[0]?.id || '';
-                      setFormData((prev) => ({
-                        ...prev,
-                        category: newCat,
-                        shiftId: defaultShift,
-                        accessType: 'SHIFT',
-                        feePlanId: '',
-                        seatId: '',
-                      }));
-                    }}
-                    className={`p-3 rounded-2xl border text-left transition flex items-start space-x-3 ${
-                      formData.category === 'SHIFT_BASED'
-                        ? 'border-amber-400 bg-amber-50/70 ring-2 ring-amber-400/20'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                      <Sun className="w-4 h-4" />
-                    </div>
+                {/* STEP 1: PERSONAL DETAILS & KYC */}
+                {admissionStep === 1 && (
+                  <div className="space-y-4">
                     <div>
-                      <p className="font-bold text-slate-900 text-xs">Shift-Based Plan</p>
-                      <p className="text-[10px] text-slate-500">Morning, Afternoon, or Evening (1, 3, 4, 6m)</p>
+                      <h4 className="font-extrabold text-slate-800 text-sm mb-2.5 flex items-center space-x-1.5">
+                        <UserCheck className="w-4 h-4 text-emerald-600" />
+                        <span>Basic Student Profile</span>
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Full Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.fullName}
+                            onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500"
+                            placeholder="e.g. Aditya Sharma"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Mobile Phone *</label>
+                          <input
+                            type="tel"
+                            required
+                            value={formData.phone}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500"
+                            placeholder="+91 98765 43210"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Email Address</label>
+                          <input
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                            placeholder="aditya@example.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Target Exam / Purpose</label>
+                          <input
+                            type="text"
+                            value={formData.targetExam}
+                            onChange={(e) => setFormData({ ...formData, targetExam: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                            placeholder="UPSC, CA, NEET, GATE, etc."
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newCat = 'FULL_DAY';
-                      setFormData((prev) => ({
-                        ...prev,
-                        category: newCat,
-                        shiftId: '',
-                        accessType: 'FULL_DAY_DEDICATED',
-                        feePlanId: '',
-                        seatId: '',
-                      }));
-                    }}
-                    className={`p-3 rounded-2xl border text-left transition flex items-start space-x-3 ${
-                      formData.category === 'FULL_DAY'
-                        ? 'border-purple-400 bg-purple-50/70 ring-2 ring-purple-400/20'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900 text-xs">Full-Day Plan</p>
-                      <p className="text-[10px] text-slate-500">Dedicated Desk or Flexible Seat (All 3 Shifts)</p>
-                    </div>
-                  </button>
-                </div>
-
-                {/* Sub-Filters: Shift (if shift-based) OR Access Type (if full-day) */}
-                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                  {formData.category === 'SHIFT_BASED' ? (
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1.5">Select Shift</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {shifts.map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData((prev) => ({ ...prev, shiftId: s.id, feePlanId: '', seatId: '' }));
-                            }}
-                            className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border ${
-                              formData.shiftId === s.id
-                                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                            }`}
+                    {/* KYC & Identification */}
+                    <div className="pt-3 border-t border-slate-100">
+                      <h4 className="font-extrabold text-slate-800 text-sm mb-2.5 flex items-center space-x-1.5">
+                        <ShieldCheck className="w-4 h-4 text-blue-600" />
+                        <span>Identification & KYC Verification</span>
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-slate-600 mb-1">ID Proof Type</label>
+                          <select
+                            value={formData.idProofType}
+                            onChange={(e) => setFormData({ ...formData, idProofType: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
                           >
-                            <span>{s.name}</span>
-                            <span className="text-[9px] opacity-80 font-normal">
-                              {s.startTime} - {s.endTime}
-                            </span>
-                          </button>
-                        ))}
+                            <option value="AADHAAR">Aadhaar Card</option>
+                            <option value="PAN">PAN Card</option>
+                            <option value="VOTER_ID">Voter ID</option>
+                            <option value="PASSPORT">Passport</option>
+                            <option value="COLLEGE_ID">College / Student ID</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-600 mb-1">ID Proof Number</label>
+                          <input
+                            type="text"
+                            value={formData.idProofNumber}
+                            onChange={(e) => setFormData({ ...formData, idProofNumber: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                            placeholder="e.g. 1234 5678 9012"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-600 mb-1">Student Photo</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+                            className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-600 mb-1">KYC Document (PDF/Image)</label>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={(e) => setKycFile(e.target.files?.[0] || null)}
+                            className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
+                          />
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1.5">Select Full-Day Access Type</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              accessType: 'FULL_DAY_DEDICATED',
-                              feePlanId: '',
-                              seatId: '',
-                            }));
-                          }}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border ${
-                            formData.accessType === 'FULL_DAY_DEDICATED'
-                              ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span>Dedicated Desk (Reserved Seat)</span>
-                          <span className="text-[9px] opacity-80 font-normal">Same seat across all 3 shifts</span>
-                        </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              accessType: 'FULL_DAY_FLEXIBLE',
-                              feePlanId: '',
-                              seatId: '',
-                            }));
-                          }}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border ${
-                            formData.accessType === 'FULL_DAY_FLEXIBLE'
-                              ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span>Flexible Seat (Floating)</span>
-                          <span className="text-[9px] opacity-80 font-normal">Access to all 3 shifts flexibly</span>
-                        </button>
+                    {/* Emergency Contact & Address */}
+                    <div className="pt-3 border-t border-slate-100">
+                      <h4 className="font-extrabold text-slate-800 text-sm mb-2.5">Emergency Contact & Address</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block font-semibold text-slate-600 mb-1">Contact Name</label>
+                          <input
+                            type="text"
+                            value={formData.emergencyContactName}
+                            onChange={(e) => setFormData({ ...formData, emergencyContactName: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-600 mb-1">Relation</label>
+                          <input
+                            type="text"
+                            value={formData.emergencyContactRelation}
+                            onChange={(e) => setFormData({ ...formData, emergencyContactRelation: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-600 mb-1">Contact Phone</label>
+                          <input
+                            type="tel"
+                            value={formData.emergencyContactPhone}
+                            onChange={(e) => setFormData({ ...formData, emergencyContactPhone: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Duration Selector (1, 3, 4, 6 Months) */}
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1.5">Select Duration</label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[1, 3, 4, 6].map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => {
-                            setAdmissionDurationFilter(m);
-                            // Auto-select matching plan if any
-                            const match = feePlans.find((p) => {
-                              const catMatch =
-                                formData.category === 'SHIFT_BASED'
-                                  ? (p.category === 'SHIFT_BASED' || (!p.category && p.planType === 'SHIFT_BASED')) &&
-                                    p.shiftId === formData.shiftId
-                                  : p.category === 'FULL_DAY' && p.accessType === formData.accessType;
-                              return catMatch && p.durationMonths === m && p.isActive;
-                            });
-                            if (match) {
-                              const payAmt = match.price + (match.admissionFee || 0);
-                              setFormData((prev) => ({
-                                ...prev,
-                                feePlanId: match.id,
-                                initialPaymentAmount: payAmt,
-                              }));
-                            }
-                          }}
-                          className={`py-1.5 rounded-xl text-xs font-bold transition border ${
-                            admissionDurationFilter === m
-                              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {m} {m === 1 ? 'Month' : 'Months'}
-                        </button>
-                      ))}
+                      <div className="mt-2.5">
+                        <label className="block font-semibold text-slate-600 mb-1">Residential Address</label>
+                        <input
+                          type="text"
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                          placeholder="House / Flat / Sector / City"
+                        />
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Available Matching Plans */}
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Available Plans for Selection</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {feePlans
-                        .filter((p) => {
-                          const catMatch =
-                            formData.category === 'SHIFT_BASED'
-                              ? (p.category === 'SHIFT_BASED' || (!p.category && p.planType === 'SHIFT_BASED')) &&
-                                (!formData.shiftId || p.shiftId === formData.shiftId)
-                              : p.category === 'FULL_DAY' && p.accessType === formData.accessType;
-                          return catMatch && p.durationMonths === admissionDurationFilter && p.isActive;
-                        })
-                        .map((plan) => {
-                          const isSelected = formData.feePlanId === plan.id;
-                          const totalPay = plan.price + (plan.admissionFee || 0);
-                          return (
-                            <div
-                              key={plan.id}
+                {/* STEP 2: MEMBERSHIP PLAN, DURATION & PRICING */}
+                {admissionStep === 2 && (
+                  <div className="space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-extrabold text-slate-900 text-sm flex items-center space-x-1.5">
+                        <Tag className="w-4 h-4 text-emerald-600" />
+                        <span>Select Membership Category & Plan</span>
+                      </h4>
+                      <span className="text-[11px] text-slate-500 font-medium">Independent Flexible Pricing</span>
+                    </div>
+
+                    {/* Category Selection Tabs */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newCat = 'SHIFT_BASED';
+                          const defaultShift = shifts[0]?.id || '';
+                          setFormData((prev) => ({
+                            ...prev,
+                            category: newCat,
+                            shiftId: defaultShift,
+                            accessType: 'SHIFT',
+                            feePlanId: '',
+                            seatId: '',
+                          }));
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition flex items-start space-x-3 ${
+                          formData.category === 'SHIFT_BASED'
+                            ? 'border-amber-400 bg-amber-50/70 ring-2 ring-amber-400/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                          <Sun className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-xs">Shift-Based Plan</p>
+                          <p className="text-[10px] text-slate-500">Morning, Afternoon, or Evening (1, 3, 4, 6m)</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newCat = 'FULL_DAY';
+                          setFormData((prev) => ({
+                            ...prev,
+                            category: newCat,
+                            shiftId: '',
+                            accessType: 'FULL_DAY_DEDICATED',
+                            feePlanId: '',
+                            seatId: '',
+                          }));
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition flex items-start space-x-3 ${
+                          formData.category === 'FULL_DAY'
+                            ? 'border-purple-400 bg-purple-50/70 ring-2 ring-purple-400/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-xs">Full-Day Plan</p>
+                          <p className="text-[10px] text-slate-500">Dedicated Desk or Flexible Seat (All 3 Shifts)</p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Sub-Filters: Shift (if shift-based) OR Access Type (if full-day) */}
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                      {formData.category === 'SHIFT_BASED' ? (
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1.5">Select Shift</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {shifts.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => {
+                                  setFormData((prev) => ({ ...prev, shiftId: s.id, feePlanId: '', seatId: '' }));
+                                }}
+                                className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border ${
+                                  formData.shiftId === s.id
+                                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                <span>{s.name}</span>
+                                <span className="text-[9px] opacity-80 font-normal">
+                                  {s.startTime} - {s.endTime}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1.5">Select Full-Day Access Type</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
                               onClick={() => {
                                 setFormData((prev) => ({
                                   ...prev,
-                                  feePlanId: plan.id,
-                                  initialPaymentAmount: totalPay,
+                                  accessType: 'FULL_DAY_DEDICATED',
+                                  feePlanId: '',
+                                  seatId: '',
                                 }));
                               }}
-                              className={`p-2.5 rounded-xl border cursor-pointer transition ${
-                                isSelected
-                                  ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/20'
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                              className={`py-2 px-3 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border ${
+                                formData.accessType === 'FULL_DAY_DEDICATED'
+                                  ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                               }`}
                             >
-                              <div className="flex items-center justify-between">
-                                <span className="font-extrabold text-slate-900">{plan.name}</span>
-                                {plan.hasDiscount && (
-                                  <span className="px-1.5 py-0.2 bg-rose-100 text-rose-700 text-[9px] font-bold rounded">
-                                    DISCOUNTED
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-baseline justify-between mt-1">
-                                <div>
-                                  {plan.originalPrice && plan.originalPrice > plan.price && (
-                                    <span className="text-[10px] text-slate-400 line-through mr-1 font-semibold">
-                                      ₹{plan.originalPrice}
+                              <span>Dedicated Desk (Reserved Seat)</span>
+                              <span className="text-[9px] opacity-80 font-normal">Same seat across all 3 shifts</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  accessType: 'FULL_DAY_FLEXIBLE',
+                                  feePlanId: '',
+                                  seatId: '',
+                                }));
+                              }}
+                              className={`py-2 px-3 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border ${
+                                formData.accessType === 'FULL_DAY_FLEXIBLE'
+                                  ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span>Flexible Seat (Floating)</span>
+                              <span className="text-[9px] opacity-80 font-normal">Access to all 3 shifts flexibly</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Duration Selector (1, 3, 4, 6 Months) */}
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1.5">Select Duration</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[1, 3, 4, 6].map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => {
+                                setAdmissionDurationFilter(m);
+                                const match = feePlans.find((p) => {
+                                  const catMatch =
+                                    formData.category === 'SHIFT_BASED'
+                                      ? (p.category === 'SHIFT_BASED' || (!p.category && p.planType === 'SHIFT_BASED')) &&
+                                        p.shiftId === formData.shiftId
+                                      : p.category === 'FULL_DAY' && p.accessType === formData.accessType;
+                                  return catMatch && p.durationMonths === m && p.isActive;
+                                });
+                                if (match) {
+                                  const payAmt = match.price + (match.admissionFee || 0);
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    feePlanId: match.id,
+                                    initialPaymentAmount: payAmt,
+                                  }));
+                                }
+                              }}
+                              className={`py-1.5 rounded-xl text-xs font-bold transition border ${
+                                admissionDurationFilter === m
+                                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {m} {m === 1 ? 'Month' : 'Months'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Available Matching Plans */}
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Available Plans for Selection</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {feePlans
+                            .filter((p) => {
+                              const catMatch =
+                                formData.category === 'SHIFT_BASED'
+                                  ? (p.category === 'SHIFT_BASED' || (!p.category && p.planType === 'SHIFT_BASED')) &&
+                                    (!formData.shiftId || p.shiftId === formData.shiftId)
+                                  : p.category === 'FULL_DAY' && p.accessType === formData.accessType;
+                              return catMatch && p.durationMonths === admissionDurationFilter && p.isActive;
+                            })
+                            .map((plan) => {
+                              const isSelected = formData.feePlanId === plan.id;
+                              const totalPay = plan.price + (plan.admissionFee || 0);
+                              return (
+                                <div
+                                  key={plan.id}
+                                  onClick={() => {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      feePlanId: plan.id,
+                                      initialPaymentAmount: totalPay,
+                                    }));
+                                  }}
+                                  className={`p-2.5 rounded-xl border cursor-pointer transition ${
+                                    isSelected
+                                      ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500/20'
+                                      : 'border-slate-200 bg-white hover:border-slate-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-extrabold text-slate-900">{plan.name}</span>
+                                    {plan.hasDiscount && (
+                                      <span className="px-1.5 py-0.2 bg-rose-100 text-rose-700 text-[9px] font-bold rounded">
+                                        DISCOUNTED
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-baseline justify-between mt-1">
+                                    <div>
+                                      {plan.originalPrice && plan.originalPrice > plan.price && (
+                                        <span className="text-[10px] text-slate-400 line-through mr-1 font-semibold">
+                                          ₹{plan.originalPrice}
+                                        </span>
+                                      )}
+                                      <span className="text-sm font-black text-slate-900">₹{plan.price}</span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-500">
+                                      +₹{plan.admissionFee} Adm. Fee = <strong>₹{totalPay}</strong>
                                     </span>
-                                  )}
-                                  <span className="text-sm font-black text-slate-900">₹{plan.price}</span>
+                                  </div>
                                 </div>
-                                <span className="text-[10px] text-slate-500">
-                                  +₹{plan.admissionFee} Adm. Fee = <strong>₹{totalPay}</strong>
-                                </span>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Plan Summary & Pricing Breakdown */}
+                    {(() => {
+                      const selPlan = feePlans.find((p) => p.id === formData.feePlanId);
+                      if (!selPlan) return null;
+
+                      const origPrice = selPlan.originalPrice || selPlan.price;
+                      const planDiscount = origPrice > selPlan.price ? origPrice - selPlan.price : 0;
+                      const admFee = selPlan.admissionFee || 0;
+                      const customDisc = Number(formData.customDiscountAmount) || 0;
+                      const totalPayable = Math.max(0, selPlan.price - customDisc) + admFee;
+                      const expiryDateStr = calculateExpiryDate(
+                        formData.startDate,
+                        selPlan.durationMonths,
+                        selPlan.durationDays
+                      );
+
+                      return (
+                        <div className="p-3.5 bg-gradient-to-br from-emerald-50/60 to-slate-50 rounded-2xl border border-emerald-200 space-y-2.5">
+                          <div className="flex items-center justify-between pb-1.5 border-b border-emerald-100">
+                            <div>
+                              <span className="font-black text-xs text-slate-900">{selPlan.name}</span>
+                              <span className="ml-2 text-[10px] text-emerald-800 font-bold uppercase">
+                                ({selPlan.durationMonths} Months / {selPlan.durationDays} Days)
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[10px]">
+                              VALIDATED PLAN
+                            </span>
+                          </div>
+
+                          {/* Start Date & Expiry Date */}
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <label className="block font-bold text-slate-700 mb-1">Start Date</label>
+                              <input
+                                type="date"
+                                required
+                                value={formData.startDate}
+                                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-bold text-slate-700 mb-1">Calculated Expiry Date</label>
+                              <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800 flex items-center space-x-1">
+                                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>{expiryDateStr}</span>
                               </div>
                             </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                </div>
+                          </div>
 
-                {/* Plan Summary & Pricing Breakdown */}
-                {(() => {
-                  const selPlan = feePlans.find((p) => p.id === formData.feePlanId);
-                  if (!selPlan) return null;
+                          {/* Custom Authorized Admission Discount */}
+                          <div className="grid grid-cols-2 gap-3 pt-1 border-t border-emerald-100">
+                            <div>
+                              <label className="block font-semibold text-slate-600 mb-1 text-[11px]">
+                                Special Admission Discount (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                max={selPlan.price}
+                                value={formData.customDiscountAmount}
+                                onChange={(e) => {
+                                  const cd = Number(e.target.value);
+                                  const newTot = Math.max(0, selPlan.price - cd) + admFee;
+                                  setFormData({
+                                    ...formData,
+                                    customDiscountAmount: cd,
+                                    initialPaymentAmount: newTot,
+                                  });
+                                }}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5"
+                                placeholder="0"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold text-slate-600 mb-1 text-[11px]">
+                                Discount Reason / Note
+                              </label>
+                              <input
+                                type="text"
+                                value={formData.customDiscountReason}
+                                onChange={(e) => setFormData({ ...formData, customDiscountReason: e.target.value })}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5"
+                                placeholder="e.g. Early bird / Reference"
+                              />
+                            </div>
+                          </div>
 
-                  const origPrice = selPlan.originalPrice || selPlan.price;
-                  const planDiscount = origPrice > selPlan.price ? origPrice - selPlan.price : 0;
-                  const admFee = selPlan.admissionFee || 0;
-                  const customDisc = Number(formData.customDiscountAmount) || 0;
-                  const totalPayable = Math.max(0, selPlan.price - customDisc) + admFee;
-                  const expiryDateStr = calculateExpiryDate(
-                    formData.startDate,
-                    selPlan.durationMonths,
-                    selPlan.durationDays
-                  );
-
-                  return (
-                    <div className="p-3.5 bg-gradient-to-br from-emerald-50/60 to-slate-50 rounded-2xl border border-emerald-200 space-y-2.5">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-emerald-100">
-                        <div>
-                          <span className="font-black text-xs text-slate-900">{selPlan.name}</span>
-                          <span className="ml-2 text-[10px] text-emerald-800 font-bold uppercase">
-                            ({selPlan.durationMonths} Months / {selPlan.durationDays} Days)
-                          </span>
+                          {/* Financial Breakdown Table */}
+                          <div className="bg-white p-2.5 rounded-xl border border-emerald-100 text-[11px] space-y-1">
+                            <div className="flex justify-between text-slate-600">
+                              <span>Original Membership Price:</span>
+                              <span className="font-mono">₹{origPrice.toLocaleString('en-IN')}</span>
+                            </div>
+                            {planDiscount > 0 && (
+                              <div className="flex justify-between text-rose-600 font-semibold">
+                                <span>Plan Discount Applied:</span>
+                                <span className="font-mono">- ₹{planDiscount.toLocaleString('en-IN')}</span>
+                              </div>
+                            )}
+                            {customDisc > 0 && (
+                              <div className="flex justify-between text-rose-600 font-semibold">
+                                <span>Special Admission Discount:</span>
+                                <span className="font-mono">- ₹{customDisc.toLocaleString('en-IN')}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-slate-600">
+                              <span>Admission Fee:</span>
+                              <span className="font-mono">+ ₹{admFee.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-900 font-black text-xs pt-1 border-t border-slate-100">
+                              <span>Total Payable Amount:</span>
+                              <span className="text-emerald-600 font-black font-mono">
+                                ₹{totalPayable.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[10px]">
-                          VALIDATED PLAN
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* STEP 3: SEAT SELECTION & PAYMENT */}
+                {admissionStep === 3 && (
+                  <div className="space-y-4">
+                    {/* Selected Plan Summary Banner */}
+                    {(() => {
+                      const selPlan = feePlans.find((p) => p.id === formData.feePlanId);
+                      return (
+                        <div className="p-3 bg-emerald-50/80 rounded-2xl border border-emerald-200 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block">Admitting Student:</span>
+                            <span className="font-black text-slate-900 text-sm">{formData.fullName || 'Student'}</span>
+                            <span className="text-slate-500 text-xs ml-2">({formData.phone})</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block">Plan & Duration:</span>
+                            <span className="font-bold text-slate-800 text-xs">{selPlan?.name}</span>
+                            <span className="text-emerald-700 font-black text-xs ml-2">₹{formData.initialPaymentAmount}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Floor Plan Seat Selector */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block font-extrabold text-slate-900 text-xs">
+                          Select Assigned Seat (Floor Plan Matrix) *
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-semibold">
+                          {formData.category === 'FULL_DAY' && formData.accessType === 'FULL_DAY_DEDICATED'
+                            ? 'Requires All 3 Shifts Free'
+                            : 'Requires Selected Shift Free'}
                         </span>
                       </div>
 
-                      {/* Start Date & Expiry Date */}
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Start Date</label>
-                          <input
-                            type="date"
-                            required
-                            value={formData.startDate}
-                            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Calculated Expiry Date</label>
-                          <div className="w-full bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800 flex items-center space-x-1">
-                            <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>{expiryDateStr}</span>
-                          </div>
-                        </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 max-h-56 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                        {availableSeats.map((seat) => {
+                          const isShiftBased = formData.category === 'SHIFT_BASED';
+                          const isFullDayDedicated =
+                            formData.category === 'FULL_DAY' && formData.accessType === 'FULL_DAY_DEDICATED';
+
+                          let isSeatAvailable = false;
+                          if (isShiftBased) {
+                            const shStatus = seat.shifts?.find((s: any) => s.shiftId === formData.shiftId);
+                            isSeatAvailable = shStatus ? !shStatus.isBooked : true;
+                          } else if (isFullDayDedicated) {
+                            isSeatAvailable = !seat.isFullDayOccupied && !seat.shifts?.some((s: any) => s.isBooked);
+                          } else {
+                            isSeatAvailable = true;
+                          }
+
+                          const isSelected = formData.seatId === seat.id;
+
+                          return (
+                            <button
+                              key={seat.id}
+                              type="button"
+                              disabled={!isSeatAvailable}
+                              onClick={() => setFormData({ ...formData, seatId: seat.id })}
+                              className={`p-2 rounded-xl text-center border font-bold text-xs transition flex flex-col items-center justify-center ${
+                                isSelected
+                                  ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-500/30 shadow-xs'
+                                  : isSeatAvailable
+                                  ? 'bg-white text-slate-800 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/30'
+                                  : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              <span className="font-mono text-sm">{seat.seatNumber}</span>
+                              <span
+                                className={`text-[8px] font-extrabold uppercase mt-0.5 ${
+                                  isSelected
+                                    ? 'text-white'
+                                    : isSeatAvailable
+                                    ? 'text-emerald-600'
+                                    : 'text-rose-500'
+                                }`}
+                              >
+                                {isSelected ? 'SELECTED' : isSeatAvailable ? 'FREE' : 'BOOKED'}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
 
-                      {/* Custom Authorized Admission Discount */}
-                      <div className="grid grid-cols-2 gap-3 pt-1 border-t border-emerald-100">
+                      {formData.seatId ? (
+                        <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+                          <div className="flex items-center space-x-1.5 text-emerald-800 font-bold">
+                            <CheckCircle className="w-4 h-4 text-emerald-600" />
+                            <span>Assigned Seat Number: <strong>#{availableSeats.find((s) => s.id === formData.seatId)?.seatNumber || formData.seatId}</strong></span>
+                          </div>
+                          <span className="text-[10px] text-emerald-700 bg-white px-2 py-0.5 rounded-md border border-emerald-200 font-semibold">Seat Confirmed</span>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-amber-600 font-medium">
+                          ⚠️ Click an available green seat above to assign it to this student.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Payment Collection on Admission */}
+                    <div className="pt-3 border-t border-slate-100">
+                      <h4 className="font-extrabold text-slate-900 text-xs mb-2">Payment Details & Receipt Generation</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block font-semibold text-slate-600 mb-1 text-[11px]">
-                            Special Admission Discount (₹)
-                          </label>
+                          <label className="block font-bold text-slate-700 mb-1">Amount Paid Today (₹) *</label>
                           <input
                             type="number"
                             min="0"
-                            max={selPlan.price}
-                            value={formData.customDiscountAmount}
-                            onChange={(e) => {
-                              const cd = Number(e.target.value);
-                              const newTot = Math.max(0, selPlan.price - cd) + admFee;
-                              setFormData({
-                                ...formData,
-                                customDiscountAmount: cd,
-                                initialPaymentAmount: newTot,
-                              });
-                            }}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5"
-                            placeholder="0"
+                            required
+                            value={formData.initialPaymentAmount}
+                            onChange={(e) =>
+                              setFormData({ ...formData, initialPaymentAmount: Number(e.target.value) })
+                            }
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-900"
                           />
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-600 mb-1 text-[11px]">
-                            Discount Reason / Note
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.customDiscountReason}
-                            onChange={(e) => setFormData({ ...formData, customDiscountReason: e.target.value })}
-                            className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5"
-                            placeholder="e.g. Early bird / Reference"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Financial Breakdown Table */}
-                      <div className="bg-white p-2.5 rounded-xl border border-emerald-100 text-[11px] space-y-1">
-                        <div className="flex justify-between text-slate-600">
-                          <span>Original Membership Price:</span>
-                          <span className="font-mono">₹{origPrice.toLocaleString('en-IN')}</span>
-                        </div>
-                        {planDiscount > 0 && (
-                          <div className="flex justify-between text-rose-600 font-semibold">
-                            <span>Plan Discount Applied:</span>
-                            <span className="font-mono">- ₹{planDiscount.toLocaleString('en-IN')}</span>
-                          </div>
-                        )}
-                        {customDisc > 0 && (
-                          <div className="flex justify-between text-rose-600 font-semibold">
-                            <span>Special Admission Discount:</span>
-                            <span className="font-mono">- ₹{customDisc.toLocaleString('en-IN')}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-slate-600">
-                          <span>Admission Fee:</span>
-                          <span className="font-mono">+ ₹{admFee.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-900 font-black text-xs pt-1 border-t border-slate-100">
-                          <span>Total Payable Amount:</span>
-                          <span className="text-emerald-600 font-black font-mono">
-                            ₹{totalPayable.toLocaleString('en-IN')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Step 5: Floor Plan Live Seat Selector */}
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <label className="block font-bold text-slate-800">
-                      Select Assigned Seat (Floor Plan Matrix)
-                    </label>
-                    <span className="text-[10px] text-slate-500 font-semibold">
-                      {formData.category === 'FULL_DAY' && formData.accessType === 'FULL_DAY_DEDICATED'
-                        ? 'Requires All 3 Shifts Free'
-                        : 'Requires Selected Shift Free'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 max-h-40 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200">
-                    {availableSeats.map((seat) => {
-                      const isShiftBased = formData.category === 'SHIFT_BASED';
-                      const isFullDayDedicated =
-                        formData.category === 'FULL_DAY' && formData.accessType === 'FULL_DAY_DEDICATED';
-
-                      let isSeatAvailable = false;
-                      if (isShiftBased) {
-                        const shStatus = seat.shifts?.find((s: any) => s.shiftId === formData.shiftId);
-                        isSeatAvailable = shStatus ? !shStatus.isBooked : true;
-                      } else if (isFullDayDedicated) {
-                        // Check if all shifts are unbooked and seat is not full-day occupied
-                        isSeatAvailable = !seat.isFullDayOccupied && !seat.shifts?.some((s: any) => s.isBooked);
-                      } else {
-                        // Flexible seat
-                        isSeatAvailable = true;
-                      }
-
-                      const isSelected = formData.seatId === seat.id;
-
-                      return (
-                        <button
-                          key={seat.id}
-                          type="button"
-                          disabled={!isSeatAvailable}
-                          onClick={() => setFormData({ ...formData, seatId: seat.id })}
-                          className={`p-2 rounded-xl text-center border font-bold text-xs transition flex flex-col items-center justify-center ${
-                            isSelected
-                              ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-500/30 shadow-xs'
-                              : isSeatAvailable
-                              ? 'bg-white text-slate-800 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/30'
-                              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                          }`}
-                        >
-                          <span className="font-mono">{seat.seatNumber}</span>
-                          <span
-                            className={`text-[8px] font-extrabold uppercase mt-0.5 ${
-                              isSelected
-                                ? 'text-white'
-                                : isSeatAvailable
-                                ? 'text-emerald-600'
-                                : 'text-rose-500'
-                            }`}
+                          <label className="block font-bold text-slate-700 mb-1">Payment Mode</label>
+                          <select
+                            value={formData.paymentMethod}
+                            onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800"
                           >
-                            {isSelected ? 'SELECTED' : isSeatAvailable ? 'FREE' : 'BOOKED'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {formData.seatId && (
-                    <p className="text-[11px] font-bold text-emerald-700 flex items-center space-x-1">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      <span>
-                        Seat Selected:{' '}
-                        <strong>
-                          {availableSeats.find((s) => s.id === formData.seatId)?.seatNumber || formData.seatId}
-                        </strong>
-                      </span>
-                    </p>
-                  )}
-                </div>
-
-                {/* Step 6: Payment Collection on Admission */}
-                {formData.feePlanId && (
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Amount Paid Today (₹)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formData.initialPaymentAmount}
-                        onChange={(e) =>
-                          setFormData({ ...formData, initialPaymentAmount: Number(e.target.value) })
-                        }
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Payment Mode</label>
-                      <select
-                        value={formData.paymentMethod}
-                        onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800"
-                      >
-                        <option value="CASH">Cash</option>
-                        <option value="UPI">UPI / Google Pay / PhonePe / QR</option>
-                        <option value="CARD">Debit / Credit Card</option>
-                        <option value="NET_BANKING">Net Banking / IMPS</option>
-                      </select>
+                            <option value="CASH">Cash</option>
+                            <option value="UPI">UPI / Google Pay / PhonePe / QR</option>
+                            <option value="CARD">Debit / Credit Card</option>
+                            <option value="NET_BANKING">Net Banking / IMPS</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-              </div>
 
               {/* STICKY FOOTER */}
-              <div className="flex items-center justify-between sm:justify-end gap-3 px-5 py-3.5 border-t border-slate-100 shrink-0 bg-slate-50/90">
-                <button
-                  type="button"
-                  onClick={() => setShowAdmissionModal(false)}
-                  className="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-200 text-xs transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm disabled:opacity-50 text-xs transition flex items-center space-x-1.5"
-                >
-                  {submitting ? 'Admitting Student...' : 'Complete Admission & Issue Invoice'}
-                </button>
+              <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-100 shrink-0 bg-slate-50/90">
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdmissionModal(false)}
+                    className="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-200 text-xs transition"
+                  >
+                    Cancel
+                  </button>
+                  {admissionStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setAdmissionStep((prev) => (prev === 3 ? 2 : 1))}
+                      className="px-3.5 py-2 rounded-xl font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs transition flex items-center space-x-1"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back</span>
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  {admissionStep === 1 && (
+                    <button
+                      type="button"
+                      onClick={handleNextStep1}
+                      className="px-5 py-2.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm text-xs transition flex items-center space-x-1.5"
+                    >
+                      <span>Next: Membership Plan</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {admissionStep === 2 && (
+                    <button
+                      type="button"
+                      onClick={handleNextStep2}
+                      className="px-5 py-2.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm text-xs transition flex items-center space-x-1.5"
+                    >
+                      <span>Next: Select Seat & Payment</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {admissionStep === 3 && (
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="px-5 py-2.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm disabled:opacity-50 text-xs transition flex items-center space-x-1.5"
+                    >
+                      {submitting ? 'Admitting Student...' : 'Complete Admission & Issue Invoice'}
+                    </button>
+                  )}
+                </div>
               </div>
             </form>
           </div>

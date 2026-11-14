@@ -118,6 +118,59 @@ export const FloorPlanPage: React.FC = () => {
   // Search & Filter in Grid/List View
   const [searchFilter, setSearchFilter] = useState('');
   const [shiftFilter, setShiftFilter] = useState('ALL');
+  const [healingNumbers, setHealingNumbers] = useState(false);
+
+  // Analysis of numbering gaps, prefixes, and duplicates
+  const numberingAnalysis = React.useMemo(() => {
+    const nums = new Set<number>();
+    const duplicates = new Set<string>();
+    const seen = new Set<string>();
+    let hasPrefixes = false;
+
+    seats.forEach((s) => {
+      const raw = (s.seatNumber || '').trim();
+      if (seen.has(raw)) duplicates.add(raw);
+      seen.add(raw);
+      if (/[^0-9]/.test(raw)) hasPrefixes = true;
+      const n = parseInt(raw.replace(/\D/g, ''), 10);
+      if (!isNaN(n) && n > 0) nums.add(n);
+    });
+
+    const max = nums.size > 0 ? Math.max(...Array.from(nums)) : 0;
+    const missingGaps: number[] = [];
+    for (let i = 1; i < max; i++) {
+      if (!nums.has(i)) missingGaps.push(i);
+    }
+
+    let nextSmallest = 1;
+    while (nums.has(nextSmallest)) nextSmallest++;
+
+    return {
+      max,
+      missingGaps,
+      duplicates: Array.from(duplicates),
+      nextAvailable: nextSmallest.toString(),
+      hasPrefixes,
+      hasIssues: hasPrefixes || duplicates.size > 0,
+    };
+  }, [seats]);
+
+  const handleAutoHealNumbers = async () => {
+    if (!selectedRoomId) return;
+    if (!window.confirm('Do you want to automatically resolve non-numeric prefixes (e.g. S-46) and duplicate seat numbers by assigning the smallest missing numbers? All bookings and student records will remain preserved.')) {
+      return;
+    }
+    setHealingNumbers(true);
+    try {
+      const res: any = await api.post(`/floors/rooms/${selectedRoomId}/auto-heal-numbers`);
+      alert(res.data?.message || 'Seat numbers healed and standardized successfully.');
+      await fetchRoomLayout(selectedRoomId);
+    } catch (err: any) {
+      alert(err.response?.data?.error || err.message || 'Failed to auto-heal seat numbers');
+    } finally {
+      setHealingNumbers(false);
+    }
+  };
 
   useEffect(() => {
     fetchFloors();
@@ -390,12 +443,23 @@ export const FloorPlanPage: React.FC = () => {
     setHasMovedFarEnough(false);
   };
 
-  // Add new seat with Simple Sequential Numeric Number (1, 2, 3...)
+  // Helper: Find smallest available missing number in seats
+  const getSmallestAvailableSeatNumber = (seatList: Seat[]): string => {
+    const existing = new Set<number>();
+    for (const s of seatList) {
+      const parsed = parseInt((s.seatNumber || '').replace(/\D/g, ''), 10);
+      if (!isNaN(parsed) && parsed > 0) existing.add(parsed);
+    }
+    let candidate = 1;
+    while (existing.has(candidate)) {
+      candidate++;
+    }
+    return candidate.toString();
+  };
+
+  // Add new seat with Smallest Available Missing Number (1, 2, 3... filling any gaps)
   const handleAddSeat = () => {
-    const numericSeats = seats
-      .map((s) => parseInt(s.seatNumber.replace(/\D/g, ''), 10))
-      .filter((n) => !isNaN(n));
-    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : '1';
+    const nextNumber = getSmallestAvailableSeatNumber(seats);
 
     const newSeat: Seat = {
       id: `temp-${Date.now()}`,
@@ -440,12 +504,9 @@ export const FloorPlanPage: React.FC = () => {
     recordSnapshot(updatedSeats, elements);
   };
 
-  // Duplicate Seat
+  // Duplicate Seat with Smallest Available Missing Number
   const handleDuplicateSeat = (seat: Seat) => {
-    const numericSeats = seats
-      .map((s) => parseInt(s.seatNumber.replace(/\D/g, ''), 10))
-      .filter((n) => !isNaN(n));
-    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : '1';
+    const nextNumber = getSmallestAvailableSeatNumber(seats);
 
     const duplicatedSeat: Seat = {
       ...JSON.parse(JSON.stringify(seat)),
@@ -1030,6 +1091,16 @@ export const FloorPlanPage: React.FC = () => {
                 <Plus className="w-3.5 h-3.5" />
                 <span>+ Seat</span>
               </button>
+              <span
+                title={
+                  numberingAnalysis.missingGaps.length > 0
+                    ? `Gap detected! Next seat will fill deleted gap #${numberingAnalysis.nextAvailable}`
+                    : `Next sequential seat: #${numberingAnalysis.nextAvailable}`
+                }
+                className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 hidden sm:inline-block"
+              >
+                Next: #{numberingAnalysis.nextAvailable}
+              </span>
 
               {/* Add Floor Object Dropdown */}
               <div className="relative">
@@ -1177,6 +1248,31 @@ export const FloorPlanPage: React.FC = () => {
               <p className="text-xl font-black text-blue-600">{stats.totalOccupiedShiftSlots}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Auto-Heal & Gap Analysis Notification Banner */}
+      {numberingAnalysis.hasIssues && (
+        <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center space-x-2.5 text-amber-900">
+            <span className="text-lg">⚠️</span>
+            <div>
+              <p className="font-extrabold text-amber-900">Numbering Inconsistencies Detected in Room</p>
+              <p className="text-[11px] text-amber-700">
+                {numberingAnalysis.hasPrefixes && 'Prefixed labels (e.g. S-46, A1) are present. '}
+                {numberingAnalysis.duplicates.length > 0 && `Duplicate seat numbers (${numberingAnalysis.duplicates.join(', ')}) detected. `}
+                {numberingAnalysis.missingGaps.length > 0 && `Missing gaps in sequence: ${numberingAnalysis.missingGaps.join(', ')}.`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleAutoHealNumbers}
+            disabled={healingNumbers}
+            className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-xs transition flex items-center space-x-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{healingNumbers ? 'Resolving & Standardizing...' : 'Auto-Heal & Standardize Numbers'}</span>
+          </button>
         </div>
       )}
 

@@ -507,3 +507,125 @@ export async function deleteSeat(req: AuthenticatedRequest, res: Response): Prom
   res.json({ message: 'Seat deleted successfully' });
 }
 
+export async function getRoomNumberingStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { roomId } = req.params;
+  const room = await prisma.room.findUnique({
+    where: { id: roomId },
+    include: { seats: { where: { isActive: true } } },
+  });
+
+  if (!room) {
+    res.status(404).json({ error: 'Room not found' });
+    return;
+  }
+
+  const seats = room.seats;
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  const numbersSet = new Set<number>();
+  let hasPrefixes = false;
+
+  for (const s of seats) {
+    const raw = s.seatNumber.trim();
+    if (seen.has(raw)) {
+      duplicates.add(raw);
+    }
+    seen.add(raw);
+
+    if (/[^0-9]/.test(raw)) {
+      hasPrefixes = true;
+    }
+
+    const intVal = parseInt(raw.replace(/\D/g, ''), 10);
+    if (!isNaN(intVal) && intVal > 0) {
+      numbersSet.add(intVal);
+    }
+  }
+
+  let nextAvailable = 1;
+  while (numbersSet.has(nextAvailable)) {
+    nextAvailable++;
+  }
+
+  const max = numbersSet.size > 0 ? Math.max(...Array.from(numbersSet)) : 0;
+  const missingGaps: number[] = [];
+  for (let i = 1; i < max; i++) {
+    if (!numbersSet.has(i)) {
+      missingGaps.push(i);
+    }
+  }
+
+  res.json({
+    totalSeats: seats.length,
+    maxNumber: max,
+    missingGaps,
+    duplicates: Array.from(duplicates),
+    nextAvailable: nextAvailable.toString(),
+    hasPrefixes,
+    isClean: !hasPrefixes && duplicates.size === 0 && missingGaps.length === 0,
+  });
+}
+
+export async function autoHealRoomNumbers(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const { roomId } = req.params;
+  const room = await prisma.room.findUnique({
+    where: { id: roomId },
+    include: { seats: { where: { isActive: true } } },
+  });
+
+  if (!room) {
+    res.status(404).json({ error: 'Room not found' });
+    return;
+  }
+
+  const seats = room.seats;
+
+  await prisma.$transaction(async (tx) => {
+    // 1. Assign temp prefixes
+    for (const seat of seats) {
+      await tx.seat.update({
+        where: { id: seat.id },
+        data: { seatNumber: `temp-${seat.id}` },
+      });
+    }
+
+    // 2. Keep numeric parts where valid and unique; fill gaps for duplicates and missing numbers
+    const usedNumbers = new Set<number>();
+    const assignments: { seatId: string; targetNumber: number }[] = [];
+
+    for (const seat of seats) {
+      const parsed = parseInt(seat.seatNumber.replace(/\D/g, ''), 10);
+      if (!isNaN(parsed) && parsed > 0 && !usedNumbers.has(parsed)) {
+        usedNumbers.add(parsed);
+        assignments.push({ seatId: seat.id, targetNumber: parsed });
+      } else {
+        assignments.push({ seatId: seat.id, targetNumber: -1 });
+      }
+    }
+
+    let gapFinder = 1;
+    for (const item of assignments) {
+      if (item.targetNumber === -1) {
+        while (usedNumbers.has(gapFinder)) {
+          gapFinder++;
+        }
+        item.targetNumber = gapFinder;
+        usedNumbers.add(gapFinder);
+      }
+    }
+
+    for (const item of assignments) {
+      await tx.seat.update({
+        where: { id: item.seatId },
+        data: { seatNumber: item.targetNumber.toString() },
+      });
+    }
+  });
+
+  await logAuditEvent('ROOM', 'AUTO_HEAL_NUMBERS', roomId, { seatsCount: seats.length }, req);
+
+  res.json({
+    message: `Successfully resolved numbering issues for ${seats.length} seats.`,
+  });
+}
+
