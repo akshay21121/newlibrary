@@ -80,9 +80,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Serve frontend static build if present (for single-port production run)
-const frontendDistPath = path.resolve(process.cwd(), '../frontend/dist');
-if (fs.existsSync(frontendDistPath)) {
+// Serve frontend static build if present (for single-port production or reverse proxy)
+const candidatePaths = [
+  path.resolve(process.cwd(), '../frontend/dist'),
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(process.cwd(), '../dist'),
+];
+const frontendDistPath = candidatePaths.find((p) => fs.existsSync(p));
+if (frontendDistPath) {
+  console.log(`📦 Serving frontend from: ${frontendDistPath}`);
   app.use(express.static(frontendDistPath));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
