@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "cross-env PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary tsx watch src/index.ts",
-    "build": "tsc && npm run prisma:generate",
+    "build": "npm run prisma:generate && tsc",
     "start": "cross-env PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary node dist/index.js",
     "prisma:generate": "cross-env PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary prisma generate",
     "prisma:migrate": "cross-env PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary prisma migrate dev",
