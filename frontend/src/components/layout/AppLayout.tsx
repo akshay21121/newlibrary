@@ -38,10 +38,10 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white border-r border-slate-800 shrink-0 select-none">
-        {/* Brand */}
-        <div className="h-16 flex items-center px-6 border-b border-slate-800 space-x-3 bg-slate-950">
+      {/* Desktop Sidebar - 100% Fixed to Viewport */}
+      <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white border-r border-slate-800 shrink-0 select-none fixed top-0 bottom-0 left-0 h-screen z-40">
+        {/* Brand Header - Fixed at Top */}
+        <div className="h-16 shrink-0 flex items-center px-6 border-b border-slate-800 space-x-3 bg-slate-950">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950">
             <BookOpen className="w-5 h-5 text-white" />
           </div>
@@ -51,7 +51,7 @@ export const AppLayout: React.FC = () => {
           </div>
         </div>
 
-        {/* Navigation Links */}
+        {/* Navigation Links - Independently Scrollable */}
         <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -75,8 +75,8 @@ export const AppLayout: React.FC = () => {
           })}
         </nav>
 
-        {/* Admin Profile Footer */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-950/60">
+        {/* Admin Profile & Logout - Fixed at Bottom */}
+        <div className="p-4 border-t border-slate-800/80 bg-slate-950/60 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 overflow-hidden">
               <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-emerald-400 font-semibold text-sm">
@@ -98,8 +98,8 @@ export const AppLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Mobile Header */}
-      <div className="md:hidden bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between px-4 h-16 shrink-0">
+      {/* Mobile Header - Sticky */}
+      <div className="md:hidden sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between px-4 h-16 shrink-0">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
             <BookOpen className="w-4 h-4 text-white" />
@@ -152,8 +152,8 @@ export const AppLayout: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto">
+      {/* Main Content Area - Pushed by 64 (256px) on desktop to prevent overlap */}
+      <main className="flex-1 min-h-screen md:pl-64 overflow-x-hidden w-full max-w-full">
         <Outlet />
       </main>
     </div>

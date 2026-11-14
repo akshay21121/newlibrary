@@ -132,25 +132,39 @@ async function main() {
 
   console.log(`✅ Default Admin user created: ${admin.email} (Password: Admin@123456)`);
 
-  // 5. Sample Floor & Room
-  const floor1 = await prisma.floor.create({
-    data: {
+  // 5. Sample Floor & Room (Deterministic Upsert to prevent duplicate floors)
+  const floor1 = await prisma.floor.upsert({
+    where: { id: 'floor-ground-0' },
+    update: {
       name: 'Ground Floor - Silent Zone',
       floorNumber: 0,
       description: 'Main silent study zone with 40 ergonomic desks',
-      rooms: {
-        create: {
-          name: 'Main Reading Hall A',
-          description: 'Spacious hall with central AC and personal cubicles',
-          width: 1400,
-          height: 900,
-        },
-      },
     },
-    include: { rooms: true },
+    create: {
+      id: 'floor-ground-0',
+      name: 'Ground Floor - Silent Zone',
+      floorNumber: 0,
+      description: 'Main silent study zone with 40 ergonomic desks',
+    },
   });
 
-  const roomA = floor1.rooms[0];
+  const roomA = await prisma.room.upsert({
+    where: { id: 'room-reading-hall-a' },
+    update: {
+      name: 'Main Reading Hall A',
+      description: 'Spacious hall with central AC and personal cubicles',
+      width: 1400,
+      height: 900,
+    },
+    create: {
+      id: 'room-reading-hall-a',
+      floorId: floor1.id,
+      name: 'Main Reading Hall A',
+      description: 'Spacious hall with central AC and personal cubicles',
+      width: 1400,
+      height: 900,
+    },
+  });
 
   // 6. Comprehensive Fee Plans (Shift-Based & Full-Day across 1, 3, 4, 6 Months)
   // Delete existing fee plans cleanly if resetting

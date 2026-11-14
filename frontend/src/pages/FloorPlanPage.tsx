@@ -279,6 +279,20 @@ export const FloorPlanPage: React.FC = () => {
     }
   };
 
+  // Fit room layout to visible canvas viewport
+  const handleFitToScreen = () => {
+    if (!canvasRef.current) return;
+    const padding = 60;
+    const containerW = canvasRef.current.clientWidth - padding;
+    const containerH = canvasRef.current.clientHeight - padding;
+    const roomW = roomData?.width || 1400;
+    const roomH = roomData?.height || 900;
+    if (containerW <= 0 || containerH <= 0) return;
+    const scale = Math.min(containerW / roomW, containerH / roomH);
+    const clampedScale = Math.min(1.2, Math.max(0.4, Number(scale.toFixed(2))));
+    setZoom(clampedScale);
+  };
+
   const handleRoomChange = (roomId: string) => {
     setSelectedRoomId(roomId);
     setSelectedSeat(null);
@@ -381,17 +395,17 @@ export const FloorPlanPage: React.FC = () => {
     const numericSeats = seats
       .map((s) => parseInt(s.seatNumber.replace(/\D/g, ''), 10))
       .filter((n) => !isNaN(n));
-    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : (seats.length + 1).toString();
+    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : '1';
 
     const newSeat: Seat = {
       id: `temp-${Date.now()}`,
       floorId: selectedFloorId,
       roomId: selectedRoomId,
       seatNumber: nextNumber,
-      x: 80,
-      y: 80,
-      width: 70,
-      height: 65,
+      x: 100,
+      y: 100,
+      width: 72,
+      height: 68,
       rotation: 0,
       type: 'STANDARD',
       isActive: true,
@@ -431,7 +445,7 @@ export const FloorPlanPage: React.FC = () => {
     const numericSeats = seats
       .map((s) => parseInt(s.seatNumber.replace(/\D/g, ''), 10))
       .filter((n) => !isNaN(n));
-    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : (seats.length + 1).toString();
+    const nextNumber = numericSeats.length > 0 ? (Math.max(...numericSeats) + 1).toString() : '1';
 
     const duplicatedSeat: Seat = {
       ...JSON.parse(JSON.stringify(seat)),
@@ -439,6 +453,8 @@ export const FloorPlanPage: React.FC = () => {
       seatNumber: nextNumber,
       x: seat.x + 20,
       y: seat.y + 20,
+      width: 72,
+      height: 68,
       summaryStatus: 'AVAILABLE',
       isFullDayOccupied: false,
       fullDayStudent: null,
@@ -681,6 +697,15 @@ export const FloorPlanPage: React.FC = () => {
   // Save full layout (seats with properties, elements with isHidden and properties)
   const handleSaveLayout = async () => {
     if (!selectedRoomId) return;
+
+    // Check for duplicate seat numbers before sending
+    const trimmedNumbers = seats.map((s) => s.seatNumber.trim());
+    const duplicate = trimmedNumbers.find((num, idx) => trimmedNumbers.indexOf(num) !== idx);
+    if (duplicate) {
+      alert(`Duplicate seat number detected: Seat "${duplicate}". Every seat must have a unique numeric number.`);
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -1175,29 +1200,37 @@ export const FloorPlanPage: React.FC = () => {
 
         {/* Viewport & Canvas Controls: Zoom, Grid, Snap */}
         <div className="flex items-center space-x-3 text-slate-300 text-xs">
-          {/* Zoom Controls */}
-          <div className="flex items-center space-x-1 bg-slate-800 px-2 py-1 rounded-xl border border-slate-700">
+          {/* Zoom Controls with Fit to Screen */}
+          <div className="flex items-center space-x-1.5 bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-700">
             <button
-              onClick={() => setZoom((prev) => Math.max(0.5, Number((prev - 0.1).toFixed(1))))}
-              title="Zoom Out"
+              onClick={() => setZoom((prev) => Math.max(0.3, Number((prev - 0.1).toFixed(1))))}
+              title="Zoom Out (-10%)"
               className="p-1 hover:text-white"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="font-mono text-[11px] w-10 text-center">{Math.round(zoom * 100)}%</span>
+            <span className="font-mono text-[11px] w-10 text-center font-bold text-white">{Math.round(zoom * 100)}%</span>
             <button
               onClick={() => setZoom((prev) => Math.min(1.8, Number((prev + 0.1).toFixed(1))))}
-              title="Zoom In"
+              title="Zoom In (+10%)"
               className="p-1 hover:text-white"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
             <button
+              onClick={handleFitToScreen}
+              title="Fit Full Room to Screen"
+              className="px-2 py-0.5 rounded text-[11px] font-bold text-emerald-400 hover:text-white bg-slate-700/70 border border-slate-600 flex items-center space-x-1 transition ml-1"
+            >
+              <Maximize2 className="w-3 h-3" />
+              <span>Fit Screen</span>
+            </button>
+            <button
               onClick={() => setZoom(1)}
               title="Reset Zoom to 100%"
-              className="p-1 hover:text-white pl-1 border-l border-slate-700"
+              className="px-1.5 py-0.5 text-slate-400 hover:text-white text-[10px] font-mono border-l border-slate-700 ml-1"
             >
-              <Maximize2 className="w-3.5 h-3.5" />
+              1:1
             </button>
           </div>
 
@@ -1252,8 +1285,8 @@ export const FloorPlanPage: React.FC = () => {
               style={{
                 transform: `scale(${zoom})`,
                 transformOrigin: 'top left',
-                width: '2600px',
-                height: '1900px',
+                width: `${Math.max(roomData?.width || 1400, 1500)}px`,
+                height: `${Math.max(roomData?.height || 900, 950)}px`,
                 position: 'relative',
                 backgroundImage: showGrid
                   ? 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)'
@@ -1331,8 +1364,8 @@ export const FloorPlanPage: React.FC = () => {
                     style={{
                       left: `${seat.x}px`,
                       top: `${seat.y}px`,
-                      width: `${seat.width || 70}px`,
-                      height: `${seat.height || 65}px`,
+                      width: `${seat.width || 72}px`,
+                      height: `${seat.height || 68}px`,
                       transform: `rotate(${seat.rotation || 0}deg)`,
                       borderRadius: `${props.borderRadius ?? 12}px`,
                       backgroundColor: props.bgColor || '#ffffff',
@@ -1739,14 +1772,14 @@ export const FloorPlanPage: React.FC = () => {
                       <span className="text-[10px] text-slate-500 font-semibold block mb-1">Width</span>
                       <div className="flex items-center space-x-1">
                         <button
-                          onClick={() => handleUpdateSeat({ width: Math.max(50, (selectedSeat.width || 70) - 5) })}
+                          onClick={() => handleUpdateSeat({ width: Math.max(50, (selectedSeat.width || 72) - 5) })}
                           className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
                         >
                           -
                         </button>
-                        <span className="w-full text-center font-mono font-bold">{selectedSeat.width || 70}px</span>
+                        <span className="w-full text-center font-mono font-bold">{selectedSeat.width || 72}px</span>
                         <button
-                          onClick={() => handleUpdateSeat({ width: Math.min(140, (selectedSeat.width || 70) + 5) })}
+                          onClick={() => handleUpdateSeat({ width: Math.min(140, (selectedSeat.width || 72) + 5) })}
                           className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
                         >
                           +
@@ -1758,14 +1791,14 @@ export const FloorPlanPage: React.FC = () => {
                       <span className="text-[10px] text-slate-500 font-semibold block mb-1">Height</span>
                       <div className="flex items-center space-x-1">
                         <button
-                          onClick={() => handleUpdateSeat({ height: Math.max(45, (selectedSeat.height || 65) - 5) })}
+                          onClick={() => handleUpdateSeat({ height: Math.max(45, (selectedSeat.height || 68) - 5) })}
                           className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
                         >
                           -
                         </button>
-                        <span className="w-full text-center font-mono font-bold">{selectedSeat.height || 65}px</span>
+                        <span className="w-full text-center font-mono font-bold">{selectedSeat.height || 68}px</span>
                         <button
-                          onClick={() => handleUpdateSeat({ height: Math.min(140, (selectedSeat.height || 65) + 5) })}
+                          onClick={() => handleUpdateSeat({ height: Math.min(140, (selectedSeat.height || 68) + 5) })}
                           className="w-6 h-6 rounded bg-white border border-slate-200 font-bold hover:bg-slate-100 flex items-center justify-center text-xs"
                         >
                           +

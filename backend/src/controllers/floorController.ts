@@ -217,6 +217,16 @@ export async function saveRoomLayout(req: AuthenticatedRequest, res: Response): 
     return;
   }
 
+  // Validate that all incoming seat numbers are unique
+  const seatNumbers = seats.map((s) => s.seatNumber.trim());
+  const duplicateSeat = seatNumbers.find((val, idx) => seatNumbers.indexOf(val) !== idx);
+  if (duplicateSeat) {
+    res.status(400).json({
+      error: `Duplicate seat number detected: "${duplicateSeat}". Every seat must have a unique numeric number.`,
+    });
+    return;
+  }
+
   await prisma.$transaction(async (tx) => {
     // 1. Update room dimensions if provided
     if (roomDimensions) {
@@ -243,6 +253,16 @@ export async function saveRoomLayout(req: AuthenticatedRequest, res: Response): 
         } else {
           await tx.seat.update({ where: { id: exSeat.id }, data: { isActive: false } });
         }
+      }
+    }
+
+    // 2.5 Temporarily rename existing seats to prevent unique constraint collisions
+    for (const seatData of seats) {
+      if (seatData.id && !seatData.id.startsWith('temp-')) {
+        await tx.seat.update({
+          where: { id: seatData.id },
+          data: { seatNumber: `temp-${seatData.id}` },
+        });
       }
     }
 
