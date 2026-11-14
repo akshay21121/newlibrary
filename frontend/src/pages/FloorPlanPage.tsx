@@ -21,6 +21,9 @@ import {
   UserX,
   Filter,
   Search,
+  Sparkles,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { Floor, Room, Seat, FloorElement } from '../types/index.js';
@@ -33,6 +36,7 @@ export const FloorPlanPage: React.FC = () => {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [elements, setElements] = useState<FloorElement[]>([]);
   const [shifts, setShifts] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
 
   // View & Mode States
   const [viewMode, setViewMode] = useState<'VISUAL' | 'GRID' | 'LIST'>('VISUAL');
@@ -142,10 +146,15 @@ export const FloorPlanPage: React.FC = () => {
           ...seat,
           shifts: m?.shifts || [],
           summaryStatus: m?.summaryStatus || 'AVAILABLE',
+          isFullDayOccupied: m?.isFullDayOccupied || false,
+          fullDayStudent: m?.fullDayStudent || null,
         };
       });
 
       setSeats(mergedSeats);
+      if (matrixRes.data.stats) {
+        setStats(matrixRes.data.stats);
+      }
       setHasUnsavedChanges(false);
     } catch (err) {
       console.error('Failed to load room layout', err);
@@ -612,17 +621,84 @@ export const FloorPlanPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Live Occupancy Statistics */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-black">
+              <Armchair className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Seats</p>
+              <p className="text-xl font-black text-slate-900">{stats.totalSeats}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+              <Check className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fully Available</p>
+              <p className="text-xl font-black text-emerald-600">{stats.fullyAvailableSeats}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-black">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Partially Occupied</p>
+              <p className="text-xl font-black text-amber-600">{stats.partiallyOccupiedSeats}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-black">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full-Day Occupied</p>
+              <p className="text-xl font-black text-purple-600">{stats.fullDayOccupiedSeats}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Occupied Shift Slots</p>
+              <p className="text-xl font-black text-blue-600">{stats.totalOccupiedShiftSlots}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 3-Shift Legend Badge */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-3.5 bg-slate-900 text-white rounded-2xl text-xs shadow-md">
-        <div className="flex items-center space-x-4">
-          <span className="font-bold text-slate-300">Shift Indicator Legend:</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-bold text-slate-300">Status Indicator:</span>
           <div className="flex items-center space-x-1.5 font-semibold text-emerald-400">
-            <span className="w-3 h-3 rounded-full bg-emerald-500 border border-emerald-300" />
-            <span>Green = Booked (Occupied)</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span>Green = Occupied / Booked</span>
           </div>
           <div className="flex items-center space-x-1.5 font-semibold text-rose-400">
-            <span className="w-3 h-3 rounded-full bg-rose-500 border border-rose-300" />
-            <span>Red = Available (Click to Book)</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+            <span>Red = Available</span>
+          </div>
+          <div className="flex items-center space-x-1.5 font-semibold text-amber-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+            <span>Yellow = Pending</span>
+          </div>
+          <div className="flex items-center space-x-1.5 font-semibold text-slate-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
+            <span>Grey = Inactive</span>
+          </div>
+          <div className="flex items-center space-x-1.5 font-semibold text-purple-300 pl-2 border-l border-slate-700">
+            <span className="px-1.5 py-0.2 bg-purple-500 text-white rounded text-[10px] font-black">FULL DAY</span>
+            <span>All 3 Shifts Reserved</span>
           </div>
         </div>
 
@@ -713,41 +789,63 @@ export const FloorPlanPage: React.FC = () => {
                   {/* Seat Number Top Bar */}
                   <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-800 leading-none">
                     <span className="font-mono">{seat.seatNumber}</span>
-                    {seat.type === 'PREMIUM' && (
+                    {seat.isFullDayOccupied ? (
+                      <span className="px-1 py-0.2 bg-purple-600 text-white rounded text-[8px] font-black">
+                        FULL DAY
+                      </span>
+                    ) : seat.type === 'PREMIUM' ? (
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Premium Desk" />
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Three Independent Shift Sections Per Seat */}
                   {builderMode === 'LIVE_SHIFTS' ? (
                     <div className="flex flex-col gap-1 mt-1">
-                      {seat.shifts?.map((shift) => (
+                      {seat.isFullDayOccupied ? (
                         <div
-                          key={shift.shiftId}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (shift.isBooked) {
-                              setSelectedSeat(seat);
-                            } else {
-                              openBookingModal(seat, shift.shiftId);
-                            }
+                            setSelectedSeat(seat);
                           }}
-                          title={
-                            shift.isBooked
-                              ? `Booked by: ${shift.booking?.studentName} (${shift.booking?.admissionNumber})`
-                              : `Available for ${shift.shiftName}. Click to Book!`
-                          }
-                          className={`h-3 rounded flex items-center justify-between px-1 text-[8px] font-bold tracking-tight transition cursor-pointer ${
-                            shift.isBooked
-                              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                              : 'bg-rose-500 text-white hover:bg-rose-600'
-                          }`}
+                          className="h-10 rounded bg-emerald-600 text-white flex flex-col justify-center items-center px-1 text-[8px] font-black shadow-xs cursor-pointer hover:bg-emerald-700 transition"
+                          title={`Full-Day Dedicated Occupant: ${seat.fullDayStudent?.fullName || 'Member'}`}
                         >
-                          <span className="truncate">
-                            {shift.shiftCode.charAt(0)}: {shift.isBooked ? shift.booking?.studentName?.split(' ')[0] : 'FREE'}
+                          <span className="truncate max-w-[65px] font-bold">
+                            {seat.fullDayStudent?.fullName?.split(' ')[0] || 'FULL DAY'}
+                          </span>
+                          <span className="text-[7px] text-emerald-100 font-mono">
+                            {seat.fullDayStudent?.admissionNumber || 'ALL 3 SHIFTS'}
                           </span>
                         </div>
-                      ))}
+                      ) : (
+                        seat.shifts?.map((shift) => (
+                          <div
+                            key={shift.shiftId}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (shift.isBooked) {
+                                setSelectedSeat(seat);
+                              } else {
+                                openBookingModal(seat, shift.shiftId);
+                              }
+                            }}
+                            title={
+                              shift.isBooked
+                                ? `Booked by: ${shift.booking?.studentName} (${shift.booking?.admissionNumber})`
+                                : `Available for ${shift.shiftName}. Click to Book!`
+                            }
+                            className={`h-3 rounded flex items-center justify-between px-1 text-[8px] font-bold tracking-tight transition cursor-pointer ${
+                              shift.isBooked
+                                ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                : 'bg-rose-500 text-white hover:bg-rose-600'
+                            }`}
+                          >
+                            <span className="truncate">
+                              {shift.shiftCode.charAt(0)}: {shift.isBooked ? shift.booking?.studentName?.split(' ')[0] : 'FREE'}
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   ) : (
                     <div className="flex-1 flex items-center justify-center text-slate-400">
@@ -779,6 +877,24 @@ export const FloorPlanPage: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Full-Day Dedicated Banner if Applicable */}
+              {selectedSeat.isFullDayOccupied && selectedSeat.fullDayStudent && (
+                <div className="p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white font-black text-[9px] flex items-center space-x-1">
+                      <Sparkles className="w-3 h-3" />
+                      <span>FULL-DAY DEDICATED</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-purple-700">All 3 Shifts Reserved</span>
+                  </div>
+                  <p className="font-extrabold text-slate-900 text-xs">{selectedSeat.fullDayStudent.fullName}</p>
+                  <p className="text-[10px] text-slate-500 font-mono">Admission: {selectedSeat.fullDayStudent.admissionNumber}</p>
+                  {selectedSeat.fullDayStudent.phone && (
+                    <p className="text-[10px] text-slate-500">Contact: {selectedSeat.fullDayStudent.phone}</p>
+                  )}
+                </div>
+              )}
 
               {/* Three Shifts Status Breakdown */}
               <div className="space-y-2.5">

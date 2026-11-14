@@ -7,11 +7,19 @@ import { generateInvoiceNumber, generateReceiptNumber } from '../utils/sequences
 
 const feePlanSchema = z.object({
   name: z.string().min(2),
-  planType: z.enum(['SHIFT_BASED', 'DURATION_BASED', 'ADMISSION_FEE']).default('SHIFT_BASED'),
-  durationDays: z.number().min(1).default(30),
+  category: z.enum(['SHIFT_BASED', 'FULL_DAY']).default('SHIFT_BASED'),
+  planType: z.string().default('SHIFT_BASED'),
+  accessType: z.enum(['FULL_DAY_DEDICATED', 'FULL_DAY_FLEXIBLE', 'SHIFT']).optional().nullable(),
   shiftId: z.string().optional().nullable(),
-  price: z.number().min(0),
+  durationMonths: z.number().min(1).default(1),
+  durationDays: z.number().min(1).default(30),
+  originalPrice: z.number().min(0).optional().nullable(),
+  price: z.number().min(0), // final discounted membership price
   admissionFee: z.number().min(0).default(0),
+  hasDiscount: z.boolean().default(false),
+  discountType: z.enum(['FIXED', 'PERCENTAGE']).optional().nullable(),
+  discountValue: z.number().min(0).optional().nullable(),
+  discountValidUntil: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
 });
@@ -41,30 +49,105 @@ const reversePaymentSchema = z.object({
 
 // Fee Plans
 export async function getFeePlans(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const category = req.query.category as string | undefined;
+  const shiftId = req.query.shiftId as string | undefined;
+  const accessType = req.query.accessType as string | undefined;
+  const durationMonths = req.query.durationMonths ? parseInt(req.query.durationMonths as string, 10) : undefined;
+  const isActive = req.query.isActive !== undefined ? req.query.isActive === 'true' : undefined;
+
+  const where: any = {};
+  if (category) where.category = category;
+  if (shiftId) where.shiftId = shiftId;
+  if (accessType) where.accessType = accessType;
+  if (durationMonths) where.durationMonths = durationMonths;
+  if (isActive !== undefined) where.isActive = isActive;
+
   const plans = await prisma.feePlan.findMany({
-    orderBy: { createdAt: 'desc' },
+    where,
+    orderBy: [
+      { category: 'asc' },
+      { durationMonths: 'asc' },
+      { price: 'asc' },
+    ],
     include: {
-      shift: { select: { id: true, name: true, code: true } },
+      shift: { select: { id: true, name: true, code: true, startTime: true, endTime: true } },
       _count: { select: { bookings: true, invoices: true } },
     },
   });
 
-  res.json({ plans });
+  // Calculate dynamic savings breakdown for display
+  const plansWithCalculations = plans.map((p) => {
+    let discountAmount = 0;
+    let discountPercent = 0;
+
+    if (p.originalPrice && p.originalPrice > p.price) {
+      discountAmount = Math.round(p.originalPrice - p.price);
+      discountPercent = Math.round((discountAmount / p.originalPrice) * 100);
+    } else if (p.hasDiscount && p.discountValue) {
+      if (p.discountType === 'PERCENTAGE') {
+        discountPercent = Math.round(p.discountValue);
+        discountAmount = p.originalPrice ? Math.round((p.originalPrice * discountPercent) / 100) : 0;
+      } else {
+        discountAmount = Math.round(p.discountValue);
+        discountPercent = p.originalPrice ? Math.round((discountAmount / p.originalPrice) * 100) : 0;
+      }
+    }
+
+    const totalPayable = p.price + p.admissionFee;
+
+    return {
+      ...p,
+      calculatedDiscountAmount: discountAmount,
+      calculatedDiscountPercent: discountPercent,
+      totalPayable,
+    };
+  });
+
+  res.json({ plans: plansWithCalculations });
 }
 
 export async function createFeePlan(req: AuthenticatedRequest, res: Response): Promise<void> {
   const data = feePlanSchema.parse(req.body);
 
+  // Auto-calculate duration days if standard months passed
+  let durationDays = data.durationDays;
+  if (data.durationMonths && (!data.durationDays || data.durationDays === 30)) {
+    durationDays = data.durationMonths * 30;
+  }
+
+  // Calculate final price if discount entered
+  let price = data.price;
+  let originalPrice = data.originalPrice;
+
+  if (data.hasDiscount && data.discountValue && originalPrice) {
+    if (data.discountType === 'PERCENTAGE') {
+      price = Math.round(originalPrice - (originalPrice * data.discountValue) / 100);
+    } else if (data.discountType === 'FIXED') {
+      price = Math.max(0, originalPrice - data.discountValue);
+    }
+  }
+
   const plan = await prisma.feePlan.create({
     data: {
       name: data.name,
+      category: data.category,
       planType: data.planType,
-      durationDays: data.durationDays,
-      shiftId: data.shiftId || null,
-      price: data.price,
+      accessType: data.accessType || (data.category === 'SHIFT_BASED' ? 'SHIFT' : 'FULL_DAY_DEDICATED'),
+      shiftId: data.category === 'SHIFT_BASED' ? data.shiftId || null : null,
+      durationMonths: data.durationMonths,
+      durationDays,
+      originalPrice,
+      price,
       admissionFee: data.admissionFee,
+      hasDiscount: data.hasDiscount,
+      discountType: data.discountType || null,
+      discountValue: data.discountValue || null,
+      discountValidUntil: data.discountValidUntil ? new Date(data.discountValidUntil) : null,
       description: data.description || null,
       isActive: data.isActive,
+    },
+    include: {
+      shift: true,
     },
   });
 
@@ -77,9 +160,17 @@ export async function updateFeePlan(req: AuthenticatedRequest, res: Response): P
   const { id } = req.params;
   const data = feePlanSchema.partial().parse(req.body);
 
+  const updateData: any = { ...data };
+  if (data.discountValidUntil) {
+    updateData.discountValidUntil = new Date(data.discountValidUntil);
+  }
+
   const plan = await prisma.feePlan.update({
     where: { id },
-    data,
+    data: updateData,
+    include: {
+      shift: true,
+    },
   });
 
   await logAuditEvent('FEE_PLAN', 'UPDATE', id, data, req);
@@ -90,15 +181,45 @@ export async function updateFeePlan(req: AuthenticatedRequest, res: Response): P
 export async function deleteFeePlan(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { id } = req.params;
 
-  // Soft delete / deactivate
-  const plan = await prisma.feePlan.update({
+  const plan = await prisma.feePlan.findUnique({
     where: { id },
-    data: { isActive: false },
+    include: {
+      _count: {
+        select: {
+          bookings: true,
+          invoices: true,
+        },
+      },
+    },
   });
 
-  await logAuditEvent('FEE_PLAN', 'DEACTIVATE', id, null, req);
+  if (!plan) {
+    res.status(404).json({ error: 'Fee plan not found' });
+    return;
+  }
 
-  res.json({ message: 'Fee plan deactivated successfully', plan });
+  // Safe deletion check:
+  // If linked to historical bookings or invoices, do not delete; deactivate instead!
+  if (plan._count.bookings > 0 || plan._count.invoices > 0) {
+    await prisma.feePlan.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    await logAuditEvent('FEE_PLAN', 'DEACTIVATE', id, { reason: 'Plan is linked to active admissions/invoices' }, req);
+
+    res.json({
+      message: 'Plan has existing admissions and invoices. It has been safely deactivated instead of deleted to protect historical financial records.',
+      deactivated: true,
+    });
+    return;
+  }
+
+  // Safe to hard delete
+  await prisma.feePlan.delete({ where: { id } });
+  await logAuditEvent('FEE_PLAN', 'DELETE', id, null, req);
+
+  res.json({ message: 'Fee plan deleted successfully', deactivated: false });
 }
 
 // Invoices
@@ -132,7 +253,7 @@ export async function getInvoices(req: AuthenticatedRequest, res: Response): Pro
       where,
       include: {
         student: { select: { id: true, fullName: true, admissionNumber: true, phone: true } },
-        feePlan: { select: { name: true } },
+        feePlan: { select: { name: true, category: true, accessType: true } },
         payments: {
           where: { status: 'SUCCESS' },
           select: { id: true, receiptNumber: true, amount: true, paymentDate: true, paymentMethod: true },
@@ -433,4 +554,3 @@ export async function getReceiptData(req: AuthenticatedRequest, res: Response): 
     library,
   });
 }
-

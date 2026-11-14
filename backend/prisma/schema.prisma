@@ -171,89 +171,113 @@ model Student {
 }
 
 model FeePlan {
-  id          String        @id @default(uuid())
-  name        String        // e.g. "Monthly Morning Shift", "Full Day 3-Months"
-  planType    String        @default("SHIFT_BASED") // SHIFT_BASED, DURATION_BASED, ADMISSION_FEE
-  durationDays Int          @default(30)
-  shiftId     String?
-  price       Float         @default(0)
-  admissionFee Float        @default(0)
-  description String?
-  isActive    Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  name               String        // e.g. "Morning Shift - 3 Months", "Full Day Dedicated - 6 Months"
+  category           String        @default("SHIFT_BASED") // "SHIFT_BASED" or "FULL_DAY"
+  planType           String        @default("SHIFT_BASED") // SHIFT_BASED, DURATION_BASED, ADMISSION_FEE
+  accessType         String?       // "FULL_DAY_DEDICATED", "FULL_DAY_FLEXIBLE", "SHIFT"
+  shiftId            String?       // for shift-based plans
+  durationMonths     Int           @default(1) // 1, 3, 4, 6
+  durationDays       Int           @default(30) // 30, 90, 120, 180
+  originalPrice      Float?        // Optional original price before discount
+  price              Float         @default(0) // Final membership price
+  admissionFee       Float         @default(0) // Independent admission fee
+  hasDiscount        Boolean       @default(false)
+  discountType       String?       // "FIXED", "PERCENTAGE"
+  discountValue      Float?        // e.g. 500 or 15
+  discountValidUntil DateTime?     // Optional validity date
+  description        String?
+  isActive           Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  shift       Shift?        @relation(fields: [shiftId], references: [id], onDelete: SetNull)
-  bookings    SeatBooking[]
-  invoices    Invoice[]
+  shift              Shift?        @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  bookings           SeatBooking[]
+  invoices           Invoice[]
 }
 
 model SeatBooking {
-  id           String        @id @default(uuid())
-  studentId    String
-  seatId       String
-  shiftId      String
-  feePlanId    String?
-  startDate    DateTime
-  endDate      DateTime
-  status       String        @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED, TRANSFERRED
-  monthlyPrice Float         @default(0)
-  notes        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  bookingGroupId     String?       // Groups the 3 shift bookings together for Full-Day plans
+  studentId          String
+  seatId             String
+  shiftId            String
+  feePlanId          String?
+  membershipCategory String        @default("SHIFT_BASED") // "SHIFT_BASED" or "FULL_DAY"
+  accessType         String?       // "FULL_DAY_DEDICATED", "FULL_DAY_FLEXIBLE", "SHIFT"
+  startDate          DateTime
+  endDate            DateTime
+  status             String        @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED, TRANSFERRED
+  monthlyPrice       Float         @default(0)
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  seat         Seat          @relation(fields: [seatId], references: [id], onDelete: Cascade)
-  shift        Shift         @relation(fields: [shiftId], references: [id], onDelete: Restrict)
-  feePlan      FeePlan?      @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
-  invoices     Invoice[]
-  histories    SeatBookingHistory[]
+  student            Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  seat               Seat          @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  shift              Shift         @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  feePlan            FeePlan?      @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+  invoices           Invoice[]
+  histories          SeatBookingHistory[]
 }
 
 model SeatBookingHistory {
-  id             String       @id @default(uuid())
-  bookingId      String
-  studentId      String
-  seatId         String
-  shiftId        String
-  actionType     String       // BOOKED, TRANSFERRED, RELEASED, EXTENDED, CANCELLED
-  previousSeatId String?
-  newSeatId      String?
-  remarks        String?
-  createdBy      String?      @default("Admin")
-  createdAt      DateTime     @default(now())
+  id                 String       @id @default(uuid())
+  bookingId          String
+  bookingGroupId     String?
+  studentId          String
+  seatId             String
+  shiftId            String
+  membershipCategory String?
+  actionType         String       // BOOKED, TRANSFERRED, RELEASED, EXTENDED, CANCELLED
+  previousSeatId     String?
+  newSeatId          String?
+  remarks            String?
+  createdBy          String?      @default("Admin")
+  createdAt          DateTime     @default(now())
 
-  booking        SeatBooking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  seat           Seat         @relation(fields: [seatId], references: [id], onDelete: Cascade)
-  shift          Shift        @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  booking            SeatBooking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  student            Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  seat               Seat         @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  shift              Shift        @relation(fields: [shiftId], references: [id], onDelete: Restrict)
 }
 
 model Invoice {
-  id            String        @id @default(uuid())
-  invoiceNumber String        @unique // INV-2026-0001
-  studentId     String
-  bookingId     String?
-  feePlanId     String?
-  issueDate     DateTime      @default(now())
-  dueDate       DateTime
-  subtotal      Float         @default(0)
-  discount      Float         @default(0)
-  tax           Float         @default(0)
-  totalAmount   Float         @default(0)
-  paidAmount    Float         @default(0)
-  balanceAmount Float         @default(0)
-  status        String        @default("UNPAID") // PAID, PARTIALLY_PAID, UNPAID, OVERDUE
-  notes         String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                   String        @id @default(uuid())
+  invoiceNumber        String        @unique // INV-2026-0001
+  studentId            String
+  bookingId            String?
+  bookingGroupId       String?
+  feePlanId            String?
+  membershipCategory   String?       // "SHIFT_BASED" or "FULL_DAY"
+  accessType           String?       // "FULL_DAY_DEDICATED", "FULL_DAY_FLEXIBLE", "SHIFT"
+  durationMonths       Int?
+  durationDays         Int?
+  planSnapshot         String?       // JSON string storing full plan snapshot at admission
+  originalFee          Float         @default(0) // Original membership price before discounts
+  planDiscount         Float         @default(0) // Discount from plan
+  customDiscount       Float         @default(0) // Extra authorized admission discount
+  customDiscountReason String?       // Reason for extra discount
+  admissionFee         Float         @default(0) // Admission fee component
+  issueDate            DateTime      @default(now())
+  dueDate              DateTime
+  subtotal             Float         @default(0)
+  discount             Float         @default(0)
+  tax                  Float         @default(0)
+  totalAmount          Float         @default(0)
+  paidAmount           Float         @default(0)
+  balanceAmount        Float         @default(0)
+  status               String        @default("UNPAID") // PAID, PARTIALLY_PAID, UNPAID, OVERDUE
+  notes                String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  student       Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  booking       SeatBooking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  feePlan       FeePlan?      @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
-  payments      Payment[]
-  auditLogs     PaymentAuditLog[]
-  reminderLogs  ReminderLog[]
+  student              Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  booking              SeatBooking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  feePlan              FeePlan?      @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+  payments             Payment[]
+  auditLogs            PaymentAuditLog[]
+  reminderLogs         ReminderLog[]
 }
 
 model Payment {

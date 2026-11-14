@@ -152,55 +152,354 @@ async function main() {
 
   const roomA = floor1.rooms[0];
 
-  // 6. Fee Plans
-  const morningPlan = await prisma.feePlan.create({
-    data: {
-      name: 'Morning Shift Plan (1 Month)',
+  // 6. Comprehensive Fee Plans (Shift-Based & Full-Day across 1, 3, 4, 6 Months)
+  // Delete existing fee plans cleanly if resetting
+  await prisma.feePlan.deleteMany();
+
+  const feePlanDefinitions = [
+    // Morning Shift Plans (06:00 - 12:00)
+    {
+      name: 'Morning Shift – 1 Month',
+      category: 'SHIFT_BASED',
       planType: 'SHIFT_BASED',
-      durationDays: 30,
+      accessType: 'SHIFT',
       shiftId: morningShift.id,
+      durationMonths: 1,
+      durationDays: 30,
+      originalPrice: 1000,
       price: 900,
       admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'PERCENTAGE',
+      discountValue: 10,
       description: 'Morning session 06:00 to 12:00 with dedicated desk and high speed internet.',
     },
-  });
-
-  const afternoonPlan = await prisma.feePlan.create({
-    data: {
-      name: 'Afternoon Shift Plan (1 Month)',
+    {
+      name: 'Morning Shift – 3 Months',
+      category: 'SHIFT_BASED',
       planType: 'SHIFT_BASED',
-      durationDays: 30,
+      accessType: 'SHIFT',
+      shiftId: morningShift.id,
+      durationMonths: 3,
+      durationDays: 90,
+      originalPrice: 2700,
+      price: 2500,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 200,
+      description: 'Morning session 06:00 to 12:00 for 3 months (Save ₹200).',
+    },
+    {
+      name: 'Morning Shift – 4 Months',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
+      shiftId: morningShift.id,
+      durationMonths: 4,
+      durationDays: 120,
+      originalPrice: 3600,
+      price: 3200,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 400,
+      description: 'Morning session 06:00 to 12:00 for 4 months (Save ₹400).',
+    },
+    {
+      name: 'Morning Shift – 6 Months',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
+      shiftId: morningShift.id,
+      durationMonths: 6,
+      durationDays: 180,
+      originalPrice: 5400,
+      price: 4500,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 900,
+      description: 'Morning session 06:00 to 12:00 for 6 months (Save ₹900).',
+    },
+
+    // Afternoon Shift Plans (12:00 - 18:00)
+    {
+      name: 'Afternoon Shift – 1 Month',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
       shiftId: afternoonShift.id,
+      durationMonths: 1,
+      durationDays: 30,
+      originalPrice: 1100,
       price: 1000,
       admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 100,
       description: 'Afternoon session 12:00 to 18:00 with quiet reading environment.',
     },
-  });
-
-  const eveningPlan = await prisma.feePlan.create({
-    data: {
-      name: 'Evening Shift Plan (1 Month)',
+    {
+      name: 'Afternoon Shift – 3 Months',
+      category: 'SHIFT_BASED',
       planType: 'SHIFT_BASED',
-      durationDays: 30,
+      accessType: 'SHIFT',
+      shiftId: afternoonShift.id,
+      durationMonths: 3,
+      durationDays: 90,
+      originalPrice: 3000,
+      price: 2700,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 300,
+      description: 'Afternoon session 12:00 to 18:00 for 3 months (Save ₹300).',
+    },
+    {
+      name: 'Afternoon Shift – 4 Months',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
+      shiftId: afternoonShift.id,
+      durationMonths: 4,
+      durationDays: 120,
+      originalPrice: 4000,
+      price: 3500,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 500,
+      description: 'Afternoon session 12:00 to 18:00 for 4 months (Save ₹500).',
+    },
+    {
+      name: 'Afternoon Shift – 6 Months',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
+      shiftId: afternoonShift.id,
+      durationMonths: 6,
+      durationDays: 180,
+      originalPrice: 6000,
+      price: 5000,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 1000,
+      description: 'Afternoon session 12:00 to 18:00 for 6 months (Save ₹1000).',
+    },
+
+    // Evening Shift Plans (18:00 - 23:30)
+    {
+      name: 'Evening Shift – 1 Month',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
       shiftId: eveningShift.id,
+      durationMonths: 1,
+      durationDays: 30,
+      originalPrice: 1200,
       price: 1100,
       admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 100,
       description: 'Evening session 18:00 to 23:30 with personal desk lamp.',
     },
-  });
+    {
+      name: 'Evening Shift – 3 Months',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
+      shiftId: eveningShift.id,
+      durationMonths: 3,
+      durationDays: 90,
+      originalPrice: 3300,
+      price: 3000,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 300,
+      description: 'Evening session 18:00 to 23:30 for 3 months (Save ₹300).',
+    },
+    {
+      name: 'Evening Shift – 4 Months',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
+      shiftId: eveningShift.id,
+      durationMonths: 4,
+      durationDays: 120,
+      originalPrice: 4400,
+      price: 3900,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 500,
+      description: 'Evening session 18:00 to 23:30 for 4 months (Save ₹500).',
+    },
+    {
+      name: 'Evening Shift – 6 Months',
+      category: 'SHIFT_BASED',
+      planType: 'SHIFT_BASED',
+      accessType: 'SHIFT',
+      shiftId: eveningShift.id,
+      durationMonths: 6,
+      durationDays: 180,
+      originalPrice: 6600,
+      price: 5500,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 1100,
+      description: 'Evening session 18:00 to 23:30 for 6 months (Save ₹1100).',
+    },
 
-  const fullDayPlan = await prisma.feePlan.create({
-    data: {
-      name: 'Full Day Dedicated Desk (1 Month)',
+    // Full-Day Dedicated Desk Plans (Same reserved seat across Morning, Afternoon & Evening)
+    {
+      name: 'Full-Day Dedicated – 1 Month',
+      category: 'FULL_DAY',
       planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_DEDICATED',
+      shiftId: null,
+      durationMonths: 1,
       durationDays: 30,
+      originalPrice: 2700,
       price: 2400,
       admissionFee: 200,
-      description: 'All 3 shifts access (06:00 to 23:30) with 24/7 dedicated reserved desk.',
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 300,
+      description: 'Reserved personal dedicated desk across all 3 shifts (06:00 to 23:30).',
     },
-  });
+    {
+      name: 'Full-Day Dedicated – 3 Months',
+      category: 'FULL_DAY',
+      planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_DEDICATED',
+      shiftId: null,
+      durationMonths: 3,
+      durationDays: 90,
+      originalPrice: 7200,
+      price: 6500,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 700,
+      description: 'Reserved dedicated desk across all 3 shifts for 3 months (Save ₹700).',
+    },
+    {
+      name: 'Full-Day Dedicated – 4 Months',
+      category: 'FULL_DAY',
+      planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_DEDICATED',
+      shiftId: null,
+      durationMonths: 4,
+      durationDays: 120,
+      originalPrice: 9600,
+      price: 8000,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 1600,
+      description: 'Reserved dedicated desk across all 3 shifts for 4 months (Save ₹1600).',
+    },
+    {
+      name: 'Full-Day Dedicated – 6 Months',
+      category: 'FULL_DAY',
+      planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_DEDICATED',
+      shiftId: null,
+      durationMonths: 6,
+      durationDays: 180,
+      originalPrice: 14400,
+      price: 11000,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 3400,
+      description: 'Reserved dedicated desk across all 3 shifts for 6 months (Save ₹3400).',
+    },
 
-  console.log('✅ Fee plans created.');
+    // Full-Day Flexible Seat Plans (Access across all 3 shifts)
+    {
+      name: 'Full-Day Flexible – 1 Month',
+      category: 'FULL_DAY',
+      planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_FLEXIBLE',
+      shiftId: null,
+      durationMonths: 1,
+      durationDays: 30,
+      originalPrice: 2200,
+      price: 2000,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 200,
+      description: 'Full-day access across all three shifts with flexible seating.',
+    },
+    {
+      name: 'Full-Day Flexible – 3 Months',
+      category: 'FULL_DAY',
+      planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_FLEXIBLE',
+      shiftId: null,
+      durationMonths: 3,
+      durationDays: 90,
+      originalPrice: 6000,
+      price: 5400,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 600,
+      description: 'Full-day access across all three shifts for 3 months (Save ₹600).',
+    },
+    {
+      name: 'Full-Day Flexible – 4 Months',
+      category: 'FULL_DAY',
+      planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_FLEXIBLE',
+      shiftId: null,
+      durationMonths: 4,
+      durationDays: 120,
+      originalPrice: 8000,
+      price: 6800,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 1200,
+      description: 'Full-day access across all three shifts for 4 months (Save ₹1200).',
+    },
+    {
+      name: 'Full-Day Flexible – 6 Months',
+      category: 'FULL_DAY',
+      planType: 'DURATION_BASED',
+      accessType: 'FULL_DAY_FLEXIBLE',
+      shiftId: null,
+      durationMonths: 6,
+      durationDays: 180,
+      originalPrice: 12000,
+      price: 9500,
+      admissionFee: 200,
+      hasDiscount: true,
+      discountType: 'FIXED',
+      discountValue: 2500,
+      description: 'Full-day access across all three shifts for 6 months (Save ₹2500).',
+    },
+  ];
+
+  const createdPlans: any[] = [];
+  for (const planDef of feePlanDefinitions) {
+    const created = await prisma.feePlan.create({ data: planDef });
+    createdPlans.push(created);
+  }
+
+  const morningPlan = createdPlans[0];
+  const afternoonPlan = createdPlans[4];
+  const eveningPlan = createdPlans[8];
+  const fullDayPlan = createdPlans[12];
+
+  console.log(`✅ ${createdPlans.length} Membership Fee Plans created (Shift-Based & Full-Day across 1, 3, 4, 6 months).`);
 
   // 7. Generate a grid of 24 Seats in Room A
   const seatList = [];
@@ -269,12 +568,14 @@ async function main() {
 
   console.log(`✅ Created ${seatList.length} seats and floor elements in Hall A.`);
 
-  // 8. Sample Students
+  // 8. Sample Students (using upsert)
   const today = new Date();
   const nextMonth = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const student1 = await prisma.student.create({
-    data: {
+  const student1 = await prisma.student.upsert({
+    where: { admissionNumber: 'LIB-2026-0001' },
+    update: {},
+    create: {
       admissionNumber: 'LIB-2026-0001',
       fullName: 'Aarav Sharma',
       email: 'aarav.sharma@example.com',
@@ -294,8 +595,10 @@ async function main() {
     },
   });
 
-  const student2 = await prisma.student.create({
-    data: {
+  const student2 = await prisma.student.upsert({
+    where: { admissionNumber: 'LIB-2026-0002' },
+    update: {},
+    create: {
       admissionNumber: 'LIB-2026-0002',
       fullName: 'Priya Verma',
       email: 'priya.verma@example.com',
@@ -314,8 +617,10 @@ async function main() {
     },
   });
 
-  const student3 = await prisma.student.create({
-    data: {
+  const student3 = await prisma.student.upsert({
+    where: { admissionNumber: 'LIB-2026-0003' },
+    update: {},
+    create: {
       admissionNumber: 'LIB-2026-0003',
       fullName: 'Rohan Gupta',
       email: 'rohan.gupta@example.com',
@@ -333,180 +638,295 @@ async function main() {
     },
   });
 
-  console.log('✅ Sample Students created.');
-
-  // 9. Bookings for Seat A-01 (Morning Shift: Aarav, Evening Shift: Priya)
-  const seatA01 = seatList[0];
-  const seatA02 = seatList[1];
-
-  // Booking 1: Aarav -> Seat A-01, Morning Shift
-  const booking1 = await prisma.seatBooking.create({
-    data: {
-      studentId: student1.id,
-      seatId: seatA01.id,
-      shiftId: morningShift.id,
-      feePlanId: morningPlan.id,
-      startDate: today,
-      endDate: nextMonth,
-      monthlyPrice: 900,
+  const student4 = await prisma.student.upsert({
+    where: { admissionNumber: 'LIB-2026-0004' },
+    update: {},
+    create: {
+      admissionNumber: 'LIB-2026-0004',
+      fullName: 'Vikram Malhotra',
+      email: 'vikram.malhotra@example.com',
+      phone: '+91 98444 55667',
+      gender: 'MALE',
+      address: 'Villa 12, Golf City, Noida',
+      idProofType: 'AADHAAR',
+      idProofNumber: '9876 5432 1098',
+      emergencyContactName: 'Sanjay Malhotra',
+      emergencyContactRelation: 'Father',
+      emergencyContactPhone: '+91 98444 00004',
+      bloodGroup: 'AB+',
+      targetExam: 'UPSC CSE 2026 (Dedicated Desk)',
+      notes: 'Full-Day dedicated desk occupant.',
       status: 'ACTIVE',
     },
   });
 
-  await prisma.seatBookingHistory.create({
-    data: {
-      bookingId: booking1.id,
-      studentId: student1.id,
-      seatId: seatA01.id,
-      shiftId: morningShift.id,
-      actionType: 'BOOKED',
-      remarks: 'Initial admission booking for Morning Shift',
-    },
-  });
+  console.log('✅ Sample Students created/upserted.');
 
-  // Invoice 1 for Aarav (Fully Paid)
-  const invoice1 = await prisma.invoice.create({
-    data: {
-      invoiceNumber: 'INV-2026-0001',
-      studentId: student1.id,
-      bookingId: booking1.id,
-      feePlanId: morningPlan.id,
-      dueDate: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000),
-      subtotal: 1100, // 900 + 200 admission
-      totalAmount: 1100,
-      paidAmount: 1100,
-      balanceAmount: 0,
-      status: 'PAID',
-    },
-  });
+  // Clean prior sample bookings/invoices if re-seeding to ensure clean matrix
+  await prisma.paymentAuditLog.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.seatBookingHistory.deleteMany();
+  await prisma.seatBooking.deleteMany();
 
-  const payment1 = await prisma.payment.create({
-    data: {
-      receiptNumber: 'REC-2026-0001',
-      invoiceId: invoice1.id,
-      studentId: student1.id,
-      amount: 1100,
-      paymentMethod: 'UPI',
-      transactionRef: 'UPI-REF-902198231',
-      remarks: 'Admission fee + 1 Month Morning shift paid via Google Pay UPI',
-      status: 'SUCCESS',
-    },
-  });
+  // 9. Bookings for Seat A-01, A-02, and A-03
+  const seatA01 = await prisma.seat.findFirst({ where: { seatNumber: 'A-01' } });
+  const seatA02 = await prisma.seat.findFirst({ where: { seatNumber: 'A-02' } });
+  const seatA03 = await prisma.seat.findFirst({ where: { seatNumber: 'A-03' } });
 
-  await prisma.paymentAuditLog.create({
-    data: {
-      paymentId: payment1.id,
-      invoiceId: invoice1.id,
-      action: 'PAYMENT_RECEIVED',
-      previousState: JSON.stringify({ balanceAmount: 1100, status: 'UNPAID' }),
-      newState: JSON.stringify({ balanceAmount: 0, status: 'PAID', paymentMethod: 'UPI' }),
-      reason: 'Full settlement at counter via UPI',
-    },
-  });
+  if (seatA01 && seatA02 && seatA03) {
+    // Booking 1: Aarav -> Seat A-01, Morning Shift
+    const booking1 = await prisma.seatBooking.create({
+      data: {
+        studentId: student1.id,
+        seatId: seatA01.id,
+        shiftId: morningShift.id,
+        feePlanId: morningPlan.id,
+        membershipCategory: 'SHIFT_BASED',
+        accessType: 'SHIFT',
+        startDate: today,
+        endDate: nextMonth,
+        monthlyPrice: 900,
+        status: 'ACTIVE',
+      },
+    });
 
-  // Booking 2: Priya -> Seat A-01, Evening Shift
-  const booking2 = await prisma.seatBooking.create({
-    data: {
-      studentId: student2.id,
-      seatId: seatA01.id,
-      shiftId: eveningShift.id,
-      feePlanId: eveningPlan.id,
-      startDate: today,
-      endDate: nextMonth,
-      monthlyPrice: 1100,
-      status: 'ACTIVE',
-    },
-  });
+    await prisma.seatBookingHistory.create({
+      data: {
+        bookingId: booking1.id,
+        studentId: student1.id,
+        seatId: seatA01.id,
+        shiftId: morningShift.id,
+        membershipCategory: 'SHIFT_BASED',
+        actionType: 'BOOKED',
+        remarks: 'Morning Shift admission booking',
+      },
+    });
 
-  await prisma.seatBookingHistory.create({
-    data: {
-      bookingId: booking2.id,
-      studentId: student2.id,
-      seatId: seatA01.id,
-      shiftId: eveningShift.id,
-      actionType: 'BOOKED',
-      remarks: 'Evening Shift booked on Seat A-01',
-    },
-  });
+    const invoice1 = await prisma.invoice.create({
+      data: {
+        invoiceNumber: 'INV-2026-0001',
+        studentId: student1.id,
+        bookingId: booking1.id,
+        feePlanId: morningPlan.id,
+        membershipCategory: 'SHIFT_BASED',
+        accessType: 'SHIFT',
+        durationMonths: 1,
+        durationDays: 30,
+        originalFee: 1000,
+        planDiscount: 100,
+        admissionFee: 200,
+        subtotal: 1200,
+        discount: 100,
+        totalAmount: 1100,
+        paidAmount: 1100,
+        balanceAmount: 0,
+        dueDate: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000),
+        status: 'PAID',
+      },
+    });
 
-  // Invoice 2 for Priya (Partially Paid: Balance 500)
-  const invoice2 = await prisma.invoice.create({
-    data: {
-      invoiceNumber: 'INV-2026-0002',
-      studentId: student2.id,
-      bookingId: booking2.id,
-      feePlanId: eveningPlan.id,
-      dueDate: new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000),
-      subtotal: 1300,
-      totalAmount: 1300,
-      paidAmount: 800,
-      balanceAmount: 500,
-      status: 'PARTIALLY_PAID',
-    },
-  });
+    const payment1 = await prisma.payment.create({
+      data: {
+        receiptNumber: 'REC-2026-0001',
+        invoiceId: invoice1.id,
+        studentId: student1.id,
+        amount: 1100,
+        paymentMethod: 'UPI',
+        transactionRef: 'UPI-REF-902198231',
+        remarks: 'Admission fee + 1 Month Morning shift paid via UPI',
+        status: 'SUCCESS',
+      },
+    });
 
-  const payment2 = await prisma.payment.create({
-    data: {
-      receiptNumber: 'REC-2026-0002',
-      invoiceId: invoice2.id,
-      studentId: student2.id,
-      amount: 800,
-      paymentMethod: 'CASH',
-      remarks: 'Partial cash deposit at counter',
-      status: 'SUCCESS',
-    },
-  });
+    // Booking 2: Priya -> Seat A-01, Evening Shift
+    const booking2 = await prisma.seatBooking.create({
+      data: {
+        studentId: student2.id,
+        seatId: seatA01.id,
+        shiftId: eveningShift.id,
+        feePlanId: eveningPlan.id,
+        membershipCategory: 'SHIFT_BASED',
+        accessType: 'SHIFT',
+        startDate: today,
+        endDate: nextMonth,
+        monthlyPrice: 1100,
+        status: 'ACTIVE',
+      },
+    });
 
-  await prisma.paymentAuditLog.create({
-    data: {
-      paymentId: payment2.id,
-      invoiceId: invoice2.id,
-      action: 'PAYMENT_RECEIVED',
-      previousState: JSON.stringify({ balanceAmount: 1300, status: 'UNPAID' }),
-      newState: JSON.stringify({ balanceAmount: 500, status: 'PARTIALLY_PAID' }),
-      reason: 'Partial payment received',
-    },
-  });
+    await prisma.seatBookingHistory.create({
+      data: {
+        bookingId: booking2.id,
+        studentId: student2.id,
+        seatId: seatA01.id,
+        shiftId: eveningShift.id,
+        membershipCategory: 'SHIFT_BASED',
+        actionType: 'BOOKED',
+        remarks: 'Evening Shift booked on Seat A-01',
+      },
+    });
 
-  // Booking 3: Rohan -> Seat A-02, Afternoon Shift (Unpaid Invoice for testing reminders!)
-  const booking3 = await prisma.seatBooking.create({
-    data: {
-      studentId: student3.id,
-      seatId: seatA02.id,
-      shiftId: afternoonShift.id,
-      feePlanId: afternoonPlan.id,
-      startDate: today,
-      endDate: nextMonth,
-      monthlyPrice: 1000,
-      status: 'ACTIVE',
-    },
-  });
+    const invoice2 = await prisma.invoice.create({
+      data: {
+        invoiceNumber: 'INV-2026-0002',
+        studentId: student2.id,
+        bookingId: booking2.id,
+        feePlanId: eveningPlan.id,
+        membershipCategory: 'SHIFT_BASED',
+        accessType: 'SHIFT',
+        durationMonths: 1,
+        durationDays: 30,
+        originalFee: 1200,
+        planDiscount: 100,
+        admissionFee: 200,
+        subtotal: 1400,
+        discount: 100,
+        totalAmount: 1300,
+        paidAmount: 800,
+        balanceAmount: 500,
+        dueDate: new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000),
+        status: 'PARTIALLY_PAID',
+      },
+    });
 
-  await prisma.seatBookingHistory.create({
-    data: {
-      bookingId: booking3.id,
-      studentId: student3.id,
-      seatId: seatA02.id,
-      shiftId: afternoonShift.id,
-      actionType: 'BOOKED',
-      remarks: 'Seat A-02 Afternoon Shift admission',
-    },
-  });
+    await prisma.payment.create({
+      data: {
+        receiptNumber: 'REC-2026-0002',
+        invoiceId: invoice2.id,
+        studentId: student2.id,
+        amount: 800,
+        paymentMethod: 'CASH',
+        remarks: 'Partial cash deposit at counter',
+        status: 'SUCCESS',
+      },
+    });
 
-  const invoice3 = await prisma.invoice.create({
-    data: {
-      invoiceNumber: 'INV-2026-0003',
-      studentId: student3.id,
-      bookingId: booking3.id,
-      feePlanId: afternoonPlan.id,
-      dueDate: new Date(today.getTime() + 1 * 24 * 60 * 60 * 1000),
-      subtotal: 1200,
-      totalAmount: 1200,
-      paidAmount: 0,
-      balanceAmount: 1200,
-      status: 'UNPAID',
-    },
-  });
+    // Booking 3: Rohan -> Seat A-02, Afternoon Shift
+    const booking3 = await prisma.seatBooking.create({
+      data: {
+        studentId: student3.id,
+        seatId: seatA02.id,
+        shiftId: afternoonShift.id,
+        feePlanId: afternoonPlan.id,
+        membershipCategory: 'SHIFT_BASED',
+        accessType: 'SHIFT',
+        startDate: today,
+        endDate: nextMonth,
+        monthlyPrice: 1000,
+        status: 'ACTIVE',
+      },
+    });
+
+    await prisma.seatBookingHistory.create({
+      data: {
+        bookingId: booking3.id,
+        studentId: student3.id,
+        seatId: seatA02.id,
+        shiftId: afternoonShift.id,
+        membershipCategory: 'SHIFT_BASED',
+        actionType: 'BOOKED',
+        remarks: 'Seat A-02 Afternoon Shift admission',
+      },
+    });
+
+    await prisma.invoice.create({
+      data: {
+        invoiceNumber: 'INV-2026-0003',
+        studentId: student3.id,
+        bookingId: booking3.id,
+        feePlanId: afternoonPlan.id,
+        membershipCategory: 'SHIFT_BASED',
+        accessType: 'SHIFT',
+        durationMonths: 1,
+        durationDays: 30,
+        originalFee: 1100,
+        planDiscount: 100,
+        admissionFee: 200,
+        subtotal: 1300,
+        discount: 100,
+        totalAmount: 1200,
+        paidAmount: 0,
+        balanceAmount: 1200,
+        dueDate: new Date(today.getTime() + 1 * 24 * 60 * 60 * 1000),
+        status: 'UNPAID',
+      },
+    });
+
+    // Booking 4: Vikram Malhotra -> Seat A-03, FULL-DAY DEDICATED (All 3 Shifts Reserved!)
+    const fullDayBookingGroupId = 'full-day-booking-group-a03';
+    const shiftsToBook = [morningShift, afternoonShift, eveningShift];
+
+    for (const sh of shiftsToBook) {
+      const fullDayBooking = await prisma.seatBooking.create({
+        data: {
+          bookingGroupId: fullDayBookingGroupId,
+          studentId: student4.id,
+          seatId: seatA03.id,
+          shiftId: sh.id,
+          feePlanId: fullDayPlan.id,
+          membershipCategory: 'FULL_DAY',
+          accessType: 'FULL_DAY_DEDICATED',
+          startDate: today,
+          endDate: nextMonth,
+          monthlyPrice: 2400,
+          status: 'ACTIVE',
+        },
+      });
+
+      await prisma.seatBookingHistory.create({
+        data: {
+          bookingId: fullDayBooking.id,
+          bookingGroupId: fullDayBookingGroupId,
+          studentId: student4.id,
+          seatId: seatA03.id,
+          shiftId: sh.id,
+          membershipCategory: 'FULL_DAY',
+          actionType: 'BOOKED',
+          remarks: `Full-Day Dedicated Desk booking on Shift: ${sh.name}`,
+        },
+      });
+    }
+
+    const invoice4 = await prisma.invoice.create({
+      data: {
+        invoiceNumber: 'INV-2026-0004',
+        studentId: student4.id,
+        bookingGroupId: fullDayBookingGroupId,
+        feePlanId: fullDayPlan.id,
+        membershipCategory: 'FULL_DAY',
+        accessType: 'FULL_DAY_DEDICATED',
+        durationMonths: 1,
+        durationDays: 30,
+        originalFee: 2700,
+        planDiscount: 300,
+        admissionFee: 200,
+        subtotal: 2900,
+        discount: 300,
+        totalAmount: 2600,
+        paidAmount: 2600,
+        balanceAmount: 0,
+        dueDate: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000),
+        status: 'PAID',
+        notes: 'Full-Day Dedicated Desk membership (All 3 Shifts reserved for Seat A-03)',
+      },
+    });
+
+    await prisma.payment.create({
+      data: {
+        receiptNumber: 'REC-2026-0003',
+        invoiceId: invoice4.id,
+        studentId: student4.id,
+        amount: 2600,
+        paymentMethod: 'UPI',
+        transactionRef: 'UPI-REF-FULLDAY-8921',
+        remarks: 'Full settlement for Full-Day Dedicated Desk via UPI',
+        status: 'SUCCESS',
+      },
+    });
+
+    console.log('✅ Created Full-Day Dedicated booking on Seat A-03 for Vikram Malhotra.');
+  }
 
   console.log('✅ Sample Bookings, Invoices, and Payments seeded.');
   console.log('🎉 Database seeding completed successfully!');

@@ -68,5 +68,35 @@ describe('Library Management System API Integration Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.invoices.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('GET /api/fees/plans should return 20 plans with categories, discounts, and totalPayable calculations', async () => {
+    const res = await request(app)
+      .get('/api/fees/plans')
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.plans.length).toBeGreaterThanOrEqual(20);
+
+    const shiftPlans = res.body.plans.filter((p: any) => p.category === 'SHIFT_BASED');
+    const fullDayPlans = res.body.plans.filter((p: any) => p.category === 'FULL_DAY');
+    expect(shiftPlans.length).toBeGreaterThanOrEqual(12); // Morning, Afternoon, Evening x 4 durations
+    expect(fullDayPlans.length).toBeGreaterThanOrEqual(8); // Dedicated & Flexible x 4 durations
+
+    const discountedPlan = res.body.plans.find((p: any) => p.hasDiscount || (p.originalPrice && p.originalPrice > p.price));
+    expect(discountedPlan).toBeDefined();
+    expect(discountedPlan.totalPayable).toBe(discountedPlan.price + (discountedPlan.admissionFee || 0));
+  });
+
+  it('GET /api/seats/matrix should return live occupancy stats including Full-Day Occupied', async () => {
+    const res = await request(app)
+      .get('/api/seats/matrix')
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.stats).toBeDefined();
+    expect(res.body.stats.totalSeats).toBeGreaterThanOrEqual(1);
+    expect(res.body.stats.fullyAvailableSeats).toBeDefined();
+    expect(res.body.stats.partiallyOccupiedSeats).toBeDefined();
+    expect(res.body.stats.fullDayOccupiedSeats).toBeGreaterThanOrEqual(1); // Seat A-03 seeded
+    expect(res.body.stats.totalOccupiedShiftSlots).toBeGreaterThanOrEqual(3);
+  });
 });
 

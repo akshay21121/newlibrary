@@ -78,6 +78,13 @@ export interface Seat {
   isActive: boolean;
   shifts?: SeatShiftStatus[];
   summaryStatus?: 'FULLY_BOOKED' | 'PARTIALLY_BOOKED' | 'AVAILABLE';
+  isFullDayOccupied?: boolean;
+  fullDayStudent?: {
+    fullName: string;
+    admissionNumber: string;
+    phone?: string;
+    photoUrl?: string | null;
+  } | null;
   floorName?: string;
   roomName?: string;
 }
@@ -98,6 +105,8 @@ export interface SeatShiftStatus {
     photoUrl?: string | null;
     startDate: string;
     endDate: string;
+    membershipCategory?: string;
+    accessType?: string;
   } | null;
 }
 
@@ -151,11 +160,22 @@ export interface FeePlan {
   id: string;
   name: string;
   planType: 'SHIFT_BASED' | 'DURATION_BASED' | 'ADMISSION_FEE';
+  category: 'SHIFT_BASED' | 'FULL_DAY';
+  accessType: 'SHIFT' | 'FULL_DAY_DEDICATED' | 'FULL_DAY_FLEXIBLE';
+  durationMonths: number;
   durationDays: number;
   shiftId?: string | null;
   shift?: Shift | null;
   price: number;
+  originalPrice?: number | null;
+  hasDiscount: boolean;
+  discountType: 'FIXED' | 'PERCENTAGE';
+  discountValue: number;
+  discountValidUntil?: string | null;
   admissionFee: number;
+  calculatedDiscountAmount?: number;
+  calculatedDiscountPercent?: number;
+  totalPayable?: number;
   description?: string | null;
   isActive: boolean;
 }
@@ -166,6 +186,9 @@ export interface SeatBooking {
   seatId: string;
   shiftId: string;
   feePlanId?: string | null;
+  bookingGroupId?: string | null;
+  membershipCategory?: string | null;
+  accessType?: string | null;
   startDate: string;
   endDate: string;
   status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'TRANSFERRED';
@@ -183,6 +206,8 @@ export interface SeatBookingHistory {
   studentId: string;
   seatId: string;
   shiftId: string;
+  bookingGroupId?: string | null;
+  membershipCategory?: string | null;
   actionType: 'BOOKED' | 'TRANSFERRED' | 'RELEASED' | 'EXTENDED' | 'CANCELLED';
   previousSeatId?: string | null;
   newSeatId?: string | null;
@@ -199,6 +224,17 @@ export interface Invoice {
   invoiceNumber: string;
   studentId: string;
   bookingId?: string | null;
+  bookingGroupId?: string | null;
+  membershipCategory?: string | null;
+  accessType?: string | null;
+  durationMonths?: number | null;
+  durationDays?: number | null;
+  originalFee?: number | null;
+  planDiscount?: number | null;
+  customDiscount?: number | null;
+  customDiscountReason?: string | null;
+  admissionFee?: number | null;
+  planSnapshot?: string | null;
   feePlanId?: string | null;
   issueDate: string;
   dueDate: string;

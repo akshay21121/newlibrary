@@ -39,7 +39,9 @@ export async function getSeatMatrix(req: AuthenticatedRequest, res: Response): P
               fullName: true,
               admissionNumber: true,
               phone: true,
+              email: true,
               photoUrl: true,
+              status: true,
             },
           },
           shift: {
@@ -47,6 +49,17 @@ export async function getSeatMatrix(req: AuthenticatedRequest, res: Response): P
               id: true,
               code: true,
               name: true,
+              startTime: true,
+              endTime: true,
+            },
+          },
+          feePlan: {
+            select: {
+              id: true,
+              name: true,
+              category: true,
+              accessType: true,
+              durationMonths: true,
             },
           },
         },
@@ -55,10 +68,19 @@ export async function getSeatMatrix(req: AuthenticatedRequest, res: Response): P
     orderBy: { seatNumber: 'asc' },
   });
 
-  // Transform each seat to represent the 3 independent shifts
+  let fullyAvailableCount = 0;
+  let partiallyOccupiedCount = 0;
+  let fullDayOccupiedCount = 0;
+  let totalOccupiedSlots = 0;
+
+  // Transform each seat to represent the 3 independent shifts + Full Day detection
   const matrix = seats.map((seat) => {
     const shiftStatuses = shifts.map((shift) => {
       const activeBooking = seat.bookings.find((b) => b.shiftId === shift.id);
+      if (activeBooking) {
+        totalOccupiedSlots++;
+      }
+
       return {
         shiftId: shift.id,
         shiftCode: shift.code,
@@ -69,21 +91,52 @@ export async function getSeatMatrix(req: AuthenticatedRequest, res: Response): P
         booking: activeBooking
           ? {
               bookingId: activeBooking.id,
+              bookingGroupId: activeBooking.bookingGroupId,
               studentId: activeBooking.student.id,
               studentName: activeBooking.student.fullName,
               admissionNumber: activeBooking.student.admissionNumber,
               phone: activeBooking.student.phone,
+              email: activeBooking.student.email,
               photoUrl: activeBooking.student.photoUrl,
               startDate: activeBooking.startDate,
               endDate: activeBooking.endDate,
+              membershipCategory: activeBooking.membershipCategory,
+              accessType: activeBooking.accessType,
+              planName: activeBooking.feePlan?.name || 'Standard Plan',
             }
           : null,
       };
     });
 
-    const isFullyBooked = shiftStatuses.every((s) => s.isBooked);
-    const isPartiallyBooked = shiftStatuses.some((s) => s.isBooked) && !isFullyBooked;
+    const isAllShiftsBooked = shiftStatuses.every((s) => s.isBooked);
+    const isAnyShiftBooked = shiftStatuses.some((s) => s.isBooked);
     const isFullyAvailable = shiftStatuses.every((s) => !s.isBooked);
+
+    // Check if booked under a full-day plan by same student or group
+    const firstStudentId = shiftStatuses[0]?.booking?.studentId;
+    const isFullDayDedicated =
+      isAllShiftsBooked &&
+      shiftStatuses.every(
+        (s) =>
+          s.booking?.studentId === firstStudentId ||
+          s.booking?.membershipCategory === 'FULL_DAY'
+      );
+
+    if (isFullyAvailable) {
+      fullyAvailableCount++;
+    } else if (isFullDayDedicated || isAllShiftsBooked) {
+      fullDayOccupiedCount++;
+    } else if (isAnyShiftBooked) {
+      partiallyOccupiedCount++;
+    }
+
+    const summaryStatus = isFullDayDedicated
+      ? 'FULL_DAY_OCCUPIED'
+      : isAllShiftsBooked
+      ? 'FULLY_BOOKED'
+      : isAnyShiftBooked
+      ? 'PARTIALLY_BOOKED'
+      : 'AVAILABLE';
 
     return {
       id: seat.id,
@@ -98,18 +151,25 @@ export async function getSeatMatrix(req: AuthenticatedRequest, res: Response): P
       height: seat.height,
       rotation: seat.rotation,
       type: seat.type,
+      isActive: seat.isActive,
       shifts: shiftStatuses,
-      summaryStatus: isFullyBooked
-        ? 'FULLY_BOOKED'
-        : isPartiallyBooked
-        ? 'PARTIALLY_BOOKED'
-        : 'AVAILABLE',
+      isFullDayOccupied: isFullDayDedicated,
+      fullDayStudent: isFullDayDedicated ? shiftStatuses[0]?.booking : null,
+      summaryStatus,
     };
   });
 
   res.json({
     shifts,
     totalSeats: seats.length,
+    stats: {
+      totalSeats: seats.length,
+      fullyAvailableSeats: fullyAvailableCount,
+      partiallyOccupiedSeats: partiallyOccupiedCount,
+      fullDayOccupiedSeats: fullDayOccupiedCount,
+      totalOccupiedShiftSlots: totalOccupiedSlots,
+      totalShiftSlots: seats.length * shifts.length,
+    },
     matrix,
   });
 }
@@ -131,7 +191,7 @@ export async function getSeatDetails(req: AuthenticatedRequest, res: Response): 
         },
       },
       bookingHistories: {
-        take: 10,
+        take: 15,
         orderBy: { createdAt: 'desc' },
         include: {
           student: { select: { fullName: true, admissionNumber: true } },
@@ -148,4 +208,3 @@ export async function getSeatDetails(req: AuthenticatedRequest, res: Response): 
 
   res.json({ seat });
 }
-
