@@ -25,6 +25,7 @@ model Admin {
 model LibraryProfile {
   id                 String    @id @default("default-library")
   name               String    @default("Apex Study Library")
+  projectDisplayName String?   @default("Apex Library")
   tagline            String?   @default("Your Silent Haven for Focused Learning")
   logoUrl            String?
   coverUrl           String?

@@ -6,12 +6,16 @@ import { useAuth } from '../context/AuthContext.js';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, isConfigured } = useAuth();
+  const { login, isConfigured, profile, refreshProfile } = useAuth();
 
   const [email, setEmail] = useState('admin@apexlibrary.com');
   const [password, setPassword] = useState('Admin@123456');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    refreshProfile();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,11 +41,23 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md relative z-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 shadow-xl shadow-emerald-950 mb-4">
-            <BookOpen className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Apex Study Library</h1>
-          <p className="text-sm text-slate-400 mt-1">Single-Admin Management & Control Portal</p>
+          {profile?.logoUrl ? (
+            <img
+              src={profile.logoUrl}
+              alt="Logo"
+              className="inline-block w-16 h-16 rounded-2xl object-contain bg-white p-1 border border-slate-700 shadow-xl shadow-emerald-950 mb-4"
+            />
+          ) : (
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 shadow-xl shadow-emerald-950 mb-4">
+              <BookOpen className="w-8 h-8 text-white" />
+            </div>
+          )}
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">
+            {profile?.projectDisplayName || profile?.name || 'Apex Study Library'}
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            {profile?.tagline || 'Single-Admin Management & Control Portal'}
+          </p>
         </div>
 
         {/* Card */}

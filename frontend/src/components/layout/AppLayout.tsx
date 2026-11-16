@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../../context/AuthContext.js';
 
 export const AppLayout: React.FC = () => {
-  const { admin, logout } = useAuth();
+  const { admin, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -41,13 +41,25 @@ export const AppLayout: React.FC = () => {
       {/* Desktop Sidebar - 100% Fixed to Viewport */}
       <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white border-r border-slate-800 shrink-0 select-none fixed top-0 bottom-0 left-0 h-screen z-40">
         {/* Brand Header - Fixed at Top */}
-        <div className="h-16 shrink-0 flex items-center px-6 border-b border-slate-800 space-x-3 bg-slate-950">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950">
-            <BookOpen className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-base tracking-tight text-white leading-tight">Apex Library</h1>
-            <p className="text-[11px] text-emerald-400 font-medium">Single-Admin Portal</p>
+        <div className="h-16 shrink-0 flex items-center px-5 border-b border-slate-800 space-x-3 bg-slate-950">
+          {profile?.logoUrl ? (
+            <img
+              src={profile.logoUrl}
+              alt="Logo"
+              className="w-10 h-10 rounded-xl object-contain bg-white p-0.5 border border-slate-700 shadow-md shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950 shrink-0">
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+          )}
+          <div className="truncate">
+            <h1 className="font-bold text-base tracking-tight text-white leading-tight truncate">
+              {profile?.projectDisplayName || profile?.name || 'Apex Library'}
+            </h1>
+            <p className="text-[11px] text-emerald-400 font-medium truncate">
+              {profile?.tagline || 'Single-Admin Portal'}
+            </p>
           </div>
         </div>
 
@@ -79,9 +91,17 @@ export const AppLayout: React.FC = () => {
         <div className="p-4 border-t border-slate-800/80 bg-slate-950/60 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3 overflow-hidden">
-              <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-emerald-400 font-semibold text-sm">
-                {admin?.name?.charAt(0) || 'A'}
-              </div>
+              {admin?.avatarUrl ? (
+                <img
+                  src={admin.avatarUrl}
+                  alt={admin.name}
+                  className="w-9 h-9 rounded-full object-cover border border-slate-700 shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-emerald-400 font-semibold text-sm">
+                  {admin?.name?.charAt(0) || 'A'}
+                </div>
+              )}
               <div className="truncate">
                 <p className="text-xs font-semibold text-slate-200 truncate">{admin?.name || 'Administrator'}</p>
                 <p className="text-[11px] text-slate-400 truncate">{admin?.email}</p>
@@ -100,13 +120,25 @@ export const AppLayout: React.FC = () => {
 
       {/* Mobile Header - Sticky */}
       <div className="md:hidden sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between px-4 h-16 shrink-0">
-        <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-            <BookOpen className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-sm text-white leading-tight">Apex Library</h1>
-            <p className="text-[10px] text-emerald-400">Admin Portal</p>
+        <div className="flex items-center space-x-2.5 overflow-hidden">
+          {profile?.logoUrl ? (
+            <img
+              src={profile.logoUrl}
+              alt="Logo"
+              className="w-8 h-8 rounded-lg object-contain bg-white p-0.5 border border-slate-700 shrink-0"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0">
+              <BookOpen className="w-4 h-4 text-white" />
+            </div>
+          )}
+          <div className="truncate">
+            <h1 className="font-bold text-sm text-white leading-tight truncate">
+              {profile?.projectDisplayName || profile?.name || 'Apex Library'}
+            </h1>
+            <p className="text-[10px] text-emerald-400 truncate">
+              {profile?.tagline || 'Admin Portal'}
+            </p>
           </div>
         </div>
         <button

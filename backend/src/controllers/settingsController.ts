@@ -6,6 +6,7 @@ import { logAuditEvent } from '../utils/audit.js';
 
 const profileUpdateSchema = z.object({
   name: z.string().min(1).optional(),
+  projectDisplayName: z.string().nullable().optional(),
   tagline: z.string().nullable().optional(),
   logoUrl: z.string().nullable().optional(),
   coverUrl: z.string().nullable().optional(),
@@ -96,6 +97,37 @@ export async function updateLibraryProfile(req: AuthenticatedRequest, res: Respo
 
   res.json({
     message: 'Library profile updated successfully',
+    profile: {
+      ...updated,
+      weeklyHolidays: JSON.parse(updated.weeklyHolidays || '[]'),
+      specialClosures: JSON.parse(updated.specialClosures || '[]'),
+      facilities: JSON.parse(updated.facilities || '[]'),
+    },
+  });
+}
+
+export async function uploadLibraryLogo(req: AuthenticatedRequest, res: Response): Promise<void> {
+  const file = req.file;
+  if (!file) {
+    res.status(400).json({ error: 'No image file uploaded' });
+    return;
+  }
+
+  const logoUrl = `/uploads/${file.filename}`;
+  const existing = await prisma.libraryProfile.findFirst();
+  const id = existing?.id || 'default-library';
+
+  const updated = await prisma.libraryProfile.upsert({
+    where: { id },
+    update: { logoUrl },
+    create: { id, logoUrl },
+  });
+
+  await logAuditEvent('SETTING', 'UPDATE_LOGO', id, { logoUrl }, req);
+
+  res.json({
+    message: 'Library logo uploaded successfully',
+    logoUrl,
     profile: {
       ...updated,
       weeklyHolidays: JSON.parse(updated.weeklyHolidays || '[]'),

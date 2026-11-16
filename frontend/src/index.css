@@ -7,6 +7,21 @@
     @apply bg-slate-50 text-slate-900 font-sans;
     -webkit-tap-highlight-color: transparent;
   }
+
+  ::selection {
+    background-color: #a7f3d0 !important;
+    color: #064e3b !important;
+  }
+
+  input, textarea, select {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1 !important;
+  }
 }
 
 /* Custom scrollbars */

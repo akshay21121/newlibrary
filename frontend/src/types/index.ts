@@ -11,6 +11,7 @@ export interface Admin {
 export interface LibraryProfile {
   id: string;
   name: string;
+  projectDisplayName?: string | null;
   tagline?: string | null;
   logoUrl?: string | null;
   coverUrl?: string | null;

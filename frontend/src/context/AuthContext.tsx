@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api } from '../services/api.js';
-import { Admin } from '../types/index.js';
+import { Admin, LibraryProfile } from '../types/index.js';
 
 interface AuthContextType {
   admin: Admin | null;
+  profile: LibraryProfile | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -11,15 +12,32 @@ interface AuthContextType {
   login: (token: string, adminData: Admin) => void;
   logout: () => Promise<void>;
   checkAuthStatus: () => Promise<void>;
+  updateAdmin: (updatedAdmin: Admin) => void;
+  updateProfile: (updatedProfile: LibraryProfile) => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [admin, setAdmin] = useState<Admin | null>(null);
+  const [profile, setProfile] = useState<LibraryProfile | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('library_admin_token'));
   const [isLoading, setIsLoading] = useState(true);
   const [isConfigured, setIsConfigured] = useState(true);
+
+  const refreshProfile = async () => {
+    try {
+      const res = await api.get('/settings/profile');
+      if (res.data?.profile) {
+        setProfile(res.data.profile);
+        const title = res.data.profile.projectDisplayName || res.data.profile.name;
+        if (title) document.title = title;
+      }
+    } catch (err) {
+      // Ignored if unauthenticated
+    }
+  };
 
   const checkAuthStatus = async () => {
     try {
@@ -32,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const meRes = await api.get('/auth/me');
           setAdmin(meRes.data.admin);
           setToken(savedToken);
+          await refreshProfile();
         } catch (err) {
           localStorage.removeItem('library_admin_token');
           localStorage.removeItem('library_admin_user');
@@ -56,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(newToken);
     setAdmin(adminData);
     setIsConfigured(true);
+    refreshProfile();
   };
 
   const logout = async () => {
@@ -73,10 +93,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateAdmin = (updatedAdmin: Admin) => {
+    setAdmin(updatedAdmin);
+    localStorage.setItem('library_admin_user', JSON.stringify(updatedAdmin));
+  };
+
+  const updateProfile = (updatedProfile: LibraryProfile) => {
+    setProfile(updatedProfile);
+    const title = updatedProfile.projectDisplayName || updatedProfile.name;
+    if (title) document.title = title;
+  };
+
   return (
     <AuthContext.Provider
       value={{
         admin,
+        profile,
         token,
         isAuthenticated: !!token && !!admin,
         isLoading,
@@ -84,6 +116,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         checkAuthStatus,
+        updateAdmin,
+        updateProfile,
+        refreshProfile,
       }}
     >
       {children}
