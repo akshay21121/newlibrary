@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.js';
+import { getImageUrl } from '../../utils/imageUrl.js';
 
 export const AppLayout: React.FC = () => {
   const { admin, profile, logout } = useAuth();
@@ -44,9 +45,10 @@ export const AppLayout: React.FC = () => {
         <div className="h-16 shrink-0 flex items-center px-5 border-b border-slate-800 space-x-3 bg-slate-950">
           {profile?.logoUrl ? (
             <img
-              src={profile.logoUrl}
+              src={getImageUrl(profile.logoUrl)}
               alt="Logo"
               className="w-10 h-10 rounded-xl object-contain bg-white p-0.5 border border-slate-700 shadow-md shrink-0"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950 shrink-0">
@@ -93,9 +95,10 @@ export const AppLayout: React.FC = () => {
             <div className="flex items-center space-x-3 overflow-hidden">
               {admin?.avatarUrl ? (
                 <img
-                  src={admin.avatarUrl}
+                  src={getImageUrl(admin.avatarUrl)}
                   alt={admin.name}
                   className="w-9 h-9 rounded-full object-cover border border-slate-700 shrink-0"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                 />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-emerald-400 font-semibold text-sm">
@@ -123,9 +126,10 @@ export const AppLayout: React.FC = () => {
         <div className="flex items-center space-x-2.5 overflow-hidden">
           {profile?.logoUrl ? (
             <img
-              src={profile.logoUrl}
+              src={getImageUrl(profile.logoUrl)}
               alt="Logo"
               className="w-8 h-8 rounded-lg object-contain bg-white p-0.5 border border-slate-700 shrink-0"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0">

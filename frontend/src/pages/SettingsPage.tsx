@@ -28,6 +28,7 @@ import {
 import { api } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.js';
 import { LibraryProfile, Shift } from '../types/index.js';
+import { getImageUrl } from '../utils/imageUrl.js';
 
 export const SettingsPage: React.FC = () => {
   const { admin, profile: globalProfile, updateAdmin, updateProfile, refreshProfile } = useAuth();
@@ -671,9 +672,10 @@ export const SettingsPage: React.FC = () => {
               <div className="relative">
                 {adminForm.avatarUrl ? (
                   <img
-                    src={adminForm.avatarUrl}
+                    src={getImageUrl(adminForm.avatarUrl)}
                     alt={adminForm.name}
                     className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500 shadow-md"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-slate-800 text-emerald-400 font-black text-xl flex items-center justify-center border-2 border-slate-700 shadow-md">
@@ -889,9 +891,10 @@ export const SettingsPage: React.FC = () => {
           <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 flex items-center space-x-4">
             {brandingForm.logoUrl ? (
               <img
-                src={brandingForm.logoUrl}
+                src={getImageUrl(brandingForm.logoUrl)}
                 alt="Brand Logo"
                 className="w-12 h-12 rounded-xl object-contain bg-white p-1 border border-slate-700 shadow-md shrink-0"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
               />
             ) : (
               <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-950 shrink-0">
@@ -916,7 +919,12 @@ export const SettingsPage: React.FC = () => {
             <div className="flex items-center space-x-3.5">
               <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center p-1 overflow-hidden shadow-xs">
                 {brandingForm.logoUrl ? (
-                  <img src={brandingForm.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  <img
+                    src={getImageUrl(brandingForm.logoUrl)}
+                    alt="Logo"
+                    className="w-full h-full object-contain"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
                 ) : (
                   <Sparkles className="w-7 h-7 text-emerald-600" />
                 )}

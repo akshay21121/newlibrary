@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { BookOpen, Lock, Mail, ArrowRight, ShieldAlert, Sparkles } from 'lucide-react';
 import { api } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.js';
+import { getImageUrl } from '../utils/imageUrl.js';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -43,9 +44,10 @@ export const LoginPage: React.FC = () => {
         <div className="text-center mb-8">
           {profile?.logoUrl ? (
             <img
-              src={profile.logoUrl}
+              src={getImageUrl(profile.logoUrl)}
               alt="Logo"
               className="inline-block w-16 h-16 rounded-2xl object-contain bg-white p-1 border border-slate-700 shadow-xl shadow-emerald-950 mb-4"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 shadow-xl shadow-emerald-950 mb-4">

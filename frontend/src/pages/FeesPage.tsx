@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { Invoice, Payment, FeePlan, Shift } from '../types/index.js';
+import { getImageUrl } from '../utils/imageUrl.js';
 
 export const FeesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'INVOICES' | 'PLANS'>('INVOICES');
@@ -922,12 +923,28 @@ export const FeesPage: React.FC = () => {
             >
               {/* Header */}
               <div className="text-center pb-3 border-b border-slate-300 space-y-1">
+                {receiptData.library?.logoUrl && (
+                  <div className="flex justify-center mb-2">
+                    <img
+                      src={getImageUrl(receiptData.library.logoUrl)}
+                      alt="Library Logo"
+                      className="h-14 w-14 object-contain rounded-lg"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
                 <h2 className="font-black text-sm tracking-tight text-slate-900">
                   {receiptData.library?.name || 'APEX STUDY LIBRARY'}
                 </h2>
                 <p className="text-[10px] text-slate-500 whitespace-pre-line">
                   {receiptData.library?.receiptHeader || receiptData.library?.address}
                 </p>
+                {receiptData.library?.phone && (
+                  <p className="text-[10px] text-slate-500">Ph: {receiptData.library.phone}</p>
+                )}
+                {receiptData.library?.email && (
+                  <p className="text-[10px] text-slate-500">Email: {receiptData.library.email}</p>
+                )}
                 {receiptData.library?.gstin && (
                   <p className="text-[10px] text-slate-500">GSTIN: {receiptData.library?.gstin}</p>
                 )}
